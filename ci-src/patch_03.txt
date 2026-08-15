@@ -1,0 +1,104 @@
+l").value_or(""),
++                           airi::json::get_string(raw, "filename").value_or(""),
++                           airi::json::get_string(raw, "cookie").value_or(""),
++                           airi::json::get_string(raw, "referer").value_or(""),
++                           airi::json::get_string(raw, "origin").value_or(""),
++                           airi::json::get_string(raw, "userAgent").value_or(""));
++    }
++    if (action == "media_page") {
+         airi::MediaRequest mr;
+-        mr.page_url = airi::json::get_string(raw,"pageUrl").value_or(airi::json::get_string(raw,"url").value_or(""));
+-        mr.title = airi::json::get_string(raw,"title").value_or("Media");
+-        mr.quality = airi::json::get_string(raw,"quality").value_or("best");
++        mr.page_url = airi::json::get_string(raw, "pageUrl").value_or(airi::json::get_string(raw, "url").value_or(""));
++        mr.title = airi::json::get_string(raw, "title").value_or("Media");
++        mr.quality = airi::json::get_string(raw, "quality").value_or("best");
++        mr.cookie = airi::json::get_string(raw, "cookie").value_or("");
++        mr.referer = airi::json::get_string(raw, "referer").value_or(mr.page_url);
++        mr.user_agent = airi::json::get_string(raw, "userAgent").value_or("");
+         mr.save_directory = default_downloads();
+-        std::thread([mr] {
+-            airi::MediaWorker::download(mr, [](const airi::MediaProgress& p){
+-                auto* copy = new std::wstring(u8w(p.status + (p.detail.empty()?"":": " + p.detail)));
+-                PostMessageW(g_main, WM_AIRI_MEDIA, static_cast<WPARAM>(p.percent), reinterpret_cast<LPARAM>(copy));
+-            });
+-        }).detach();
++        return start_media_request(std::move(mr));
+     }
++    set_notice(L"Unsupported browser command.");
++    return false;
++}
++
++std::wstring extension_category(const std::filesystem::path& p) {
++    auto e = p.extension().wstring();
++    std::transform(e.begin(), e.end(), e.begin(), ::towlower);
++    const std::vector<std::wstring> programs{L".exe",L".msi",L".msix",L".appx",L".apk",L".deb",L".rpm",L".dmg",L".pkg"};
++    const std::vector<std::wstring> video{L".mp4",L".mkv",L".webm",L".mov",L".avi",L".m4v",L".ts"};
++    const std::vector<std::wstring> audio{L".mp3",L".m4a",L".aac",L".flac",L".wav",L".ogg",L".opus"};
++    const std::vector<std::wstring> docs{L".pdf",L".doc",L".docx",L".xls",L".xlsx",L".ppt",L".pptx",L".txt",L".csv"};
++    const std::vector<std::wstring> archives{L".zip",L".rar",L".7z",L".tar",L".gz",L".bz2",L".xz",L".iso",L".img"};
++    auto has=[&](const auto& v){return std::find(v.begin(),v.end(),e)!=v.end();};
++    if(has(programs)) return L"PROGRAMS"; if(has(video)) return L"VIDEO"; if(has(audio)) return L"AUDIO";
++    if(has(docs)) return L"DOCUMENTS"; if(has(archives)) return L"ARCHIVES"; return L"OTHER / UNKNOWN";
++}
++
++bool sidebar_allows(const airi::DownloadSnapshot& s, int filter) {
++    if (filter <= 0) return true;
++    if (filter == 1) return s.status == airi::DownloadStatus::Downloading || s.status == airi::DownloadStatus::Probing || s.status == airi::DownloadStatus::Queued;
++    if (filter == 2) return s.status == airi::DownloadStatus::Completed;
++    if (filter >= 4) {
++        const wchar_t* names[] = {L"PROGRAMS",L"VIDEO",L"AUDIO",L"DOCUMENTS",L"ARCHIVES",L"OTHER / UNKNOWN"};
++        return extension_category(s.output_path) == names[filter - 4];
++    }
++    return true;
++}
++
++void update_button_state() {
++    const auto id = selected_id();
++    bool direct = id && !is_media_id(id);
++    auto task = direct ? g_manager->find(id) : nullptr;
++    auto status = task ? task->snapshot().status : airi::DownloadStatus::Queued;
++    EnableWindow(g_btn_pause, task && (status == airi::DownloadStatus::Downloading || status == airi::DownloadStatus::Probing));
++    EnableWindow(g_btn_resume, task && (status == airi::DownloadStatus::Paused || status == airi::DownloadStatus::Failed));
++    EnableWindow(g_btn_cancel, task && status != airi::DownloadStatus::Completed && status != airi::DownloadStatus::Cancelled);
++    EnableWindow(g_btn_open, TRUE);
+ }
+ 
+ void refresh_list() {
+     auto items = g_manager->snapshots();
+     auto selected = selected_id();
++    int filter = static_cast<int>(SendMessageW(g_sidebar, LB_GETCURSEL, 0, 0));
+     ListView_DeleteAllItems(g_list);
+-    double total_speed = 0; int active = 0;
+-    int row = 0;
++    double total_speed = 0; int active = 0, row = 0;
+     for (const auto& s : items) {
+-        LVITEMW it{}; it.mask = LVIF_TEXT | LVIF_PARAM; it.iItem = row; auto name = u8w(s.filename); it.pszText = name.data(); it.lParam = static_cast<LPARAM>(s.id);
++        if (!sidebar_allows(s, filter)) continue;
++        LVITEMW it{}; it.mask = LVIF_TEXT | LVIF_PARAM; it.iItem = row;
++        auto name = u8w(s.filename.empty() ? "download" : s.filename); it.pszText = name.data(); it.lParam = static_cast<LPARAM>(s.id);
+         int inserted = ListView_InsertItem(g_list, &it);
+         auto set = [&](int col, const std::wstring& v) { ListView_SetItemText(g_list, inserted, col, const_cast<wchar_t*>(v.c_str())); };
+         set(1, u8w(airi::text::human_bytes(s.total_bytes)));
+@@ -140,64 +288,130 @@ void refresh_list() {
+         set(3, std::to_wstring(s.progress_percent) + L"%");
+         set(4, u8w(airi::text::human_bytes(static_cast<unsigned long long>(s.bytes_per_second))) + L"/s");
+         auto ext = s.output_path.extension().wstring(); if (ext.empty()) ext = L"Any type"; set(5, ext);
+-        if (s.id == selected) ListView_SetItemState(g_list, inserted, LVIS_SELECTED, LVIS_SELECTED);
++        if (s.id == selected) ListView_SetItemState(g_list, inserted, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+         if (s.status == airi::DownloadStatus::Downloading) { total_speed += s.bytes_per_second; ++active; }
+         ++row;
+     }
+-    std::wstring st = L"AIRI Native Engine  •  " + std::to_wstring(active) + L" active  •  " + u8w(airi::text::human_bytes(static_cast<unsigned long long>(total_speed))) + L"/s  •  ALL FILE TYPES";
++    // Media jobs are shown on All/Downloading/Completed/Video filters.
++    if (filter == 0 || filter == 1 || filter == 2 || filter == 5) {
++        std::scoped_lock lock(g_media_mutex);
++        for (const auto& j : g_media_jobs) {
++            if (filter == 1 && (j.finished || j.failed)) continue;
++            if (filter == 2 && !j.finished) continue;
++            LVITEMW it{}; it.mask = LVIF_TEXT | LVIF_PARAM; it.iItem = row;
++            auto name = j.title.empty() ? L"Media download" : j.title; it.pszText = name.data(); it.lParam = static_cast<LPARAM>(j.id);
++            int inserted = ListView_InsertItem(g_list, &it);
++            auto set = [&](int col, const std::wstring& v) { ListView_SetItemText(g_list, inserted, col, const_cast<wchar_t*>(v.c_str())); };
++            set(1, L""); set(2, j.status); set(3, std::to_wstring(j.progress) + L"%"); set(4, L""); set(5, L"Media");
++            if (j.id == selected) ListVi
