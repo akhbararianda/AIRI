@@ -1,11 +1,11 @@
-name: Build AIRI Download Manager v2
+name: Build AIRI Download Manager v2.1
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
     paths:
-      - 'ci-src/**'
+      - 'native-v2.1/**'
       - '.github/workflows/build-airi-v2.yml'
 
 jobs:
@@ -15,43 +15,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct native source
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force native-src | Out-Null
-          $parts = Get-ChildItem ci-src\chunk_*.txt | Sort-Object Name
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          [IO.File]::WriteAllBytes('airi-native-source.tar.xz', [Convert]::FromBase64String($b64))
-          tar -xf airi-native-source.tar.xz -C native-src
-
-      - name: Apply AIRI v2.1 functional patch
-        shell: powershell
-        run: |
-          $patches = Get-ChildItem ci-src\patch_*.txt | Sort-Object Name
-          $text = ($patches | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join ''
-          $text = $text.Replace("`r`n", "`n")
-          $utf8 = New-Object System.Text.UTF8Encoding($false)
-          [IO.File]::WriteAllText((Join-Path $PWD 'airi-v2.1.patch'), $text, $utf8)
-          git apply --check --whitespace=nowarn --directory=native-src airi-v2.1.patch
-          git apply --whitespace=nowarn --directory=native-src airi-v2.1.patch
-
       - name: Configure x64
         shell: powershell
-        run: cmake -S native-src -B native-src\build-win -A x64
+        run: cmake -S native-v2.1 -B native-v2.1\build-win -A x64
 
       - name: Build Release
         shell: powershell
-        run: cmake --build native-src\build-win --config Release --parallel
+        run: cmake --build native-v2.1\build-win --config Release --parallel
 
       - name: Run core tests
         shell: powershell
-        run: ctest --test-dir native-src\build-win -C Release --output-on-failure
+        run: ctest --test-dir native-v2.1\build-win -C Release --output-on-failure
 
       - name: Bundle media engine
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $tools = Join-Path $PWD 'native-src\third_party\tools'
+          $tools = Join-Path $PWD 'native-v2.1\third_party\tools'
           New-Item -ItemType Directory -Force $tools | Out-Null
 
           $yt = Join-Path $tools 'yt-dlp.exe'
@@ -83,16 +63,18 @@ jobs:
         shell: powershell
         run: |
           $required = @(
-            'native-src\build-win\Release\AIRI Download Manager.exe',
-            'native-src\build-win\Release\AIRIDMBridge.exe',
-            'native-src\third_party\tools\yt-dlp.exe',
-            'native-src\third_party\tools\deno.exe',
-            'native-src\third_party\tools\ffmpeg.exe',
-            'native-src\third_party\tools\ffprobe.exe',
-            'native-src\browser-extension\manifest.json'
+            'native-v2.1\build-win\Release\AIRI Download Manager.exe',
+            'native-v2.1\build-win\Release\AIRIDMBridge.exe',
+            'native-v2.1\third_party\tools\yt-dlp.exe',
+            'native-v2.1\third_party\tools\deno.exe',
+            'native-v2.1\third_party\tools\ffmpeg.exe',
+            'native-v2.1\third_party\tools\ffprobe.exe',
+            'native-v2.1\browser-extension\manifest.json',
+            'native-v2.1\browser-extension\popup.html',
+            'native-v2.1\browser-extension\popup.js'
           )
           foreach ($f in $required) { if (-not (Test-Path $f)) { throw "Missing package input: $f" } }
-          $manifest = Get-Content native-src\browser-extension\manifest.json -Raw | ConvertFrom-Json
+          $manifest = Get-Content native-v2.1\browser-extension\manifest.json -Raw | ConvertFrom-Json
           if ($manifest.version -ne '3.1.0') { throw "Unexpected extension version: $($manifest.version)" }
 
       - name: Install Inno Setup
@@ -101,27 +83,27 @@ jobs:
 
       - name: Build Setup EXE
         shell: powershell
-        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" native-src\installer\AIRI-DM-Native.iss'
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" native-v2.1\installer\AIRI-DM-Native.iss'
 
       - name: Verify Windows binaries
         shell: powershell
         run: |
-          Get-Item 'native-src\build-win\Release\AIRI Download Manager.exe' | Format-List Name,Length
-          Get-Item 'native-src\build-win\Release\AIRIDMBridge.exe' | Format-List Name,Length
-          Get-Item 'native-src\installer\Output\AIRI-Download-Manager-Setup-v2.exe' | Format-List Name,Length
-          $size = (Get-Item 'native-src\installer\Output\AIRI-Download-Manager-Setup-v2.exe').Length
-          if ($size -lt 20000000) { throw "Installer is unexpectedly small ($size bytes); bundled media tools may be missing." }
+          Get-Item 'native-v2.1\build-win\Release\AIRI Download Manager.exe' | Format-List Name,Length
+          Get-Item 'native-v2.1\build-win\Release\AIRIDMBridge.exe' | Format-List Name,Length
+          Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.exe' | Format-List Name,Length
+          $size = (Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.exe').Length
+          if ($size -lt 20000000) { throw "Installer unexpectedly small ($size bytes); media tools may be missing." }
 
       - name: Create SHA256
         shell: powershell
         run: |
           $files = @(
-            'native-src\installer\Output\AIRI-Download-Manager-Setup-v2.exe',
-            'native-src\build-win\Release\AIRI Download Manager.exe',
-            'native-src\build-win\Release\AIRIDMBridge.exe'
+            'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.exe',
+            'native-v2.1\build-win\Release\AIRI Download Manager.exe',
+            'native-v2.1\build-win\Release\AIRIDMBridge.exe'
           )
           $lines = foreach ($f in $files) { $h = Get-FileHash $f -Algorithm SHA256; "$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))" }
-          $lines | Set-Content native-src\SHA256SUMS.txt
+          $lines | Set-Content native-v2.1\SHA256SUMS.txt
 
       - name: Upload AIRI v2.1 Windows artifact
         uses: actions/upload-artifact@v4
@@ -130,8 +112,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
-            native-src/installer/Output/AIRI-Download-Manager-Setup-v2.exe
-            native-src/build-win/Release/AIRI Download Manager.exe
-            native-src/build-win/Release/AIRIDMBridge.exe
-            native-src/browser-extension/**
-            native-src/SHA256SUMS.txt
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.exe
+            native-v2.1/build-win/Release/AIRI Download Manager.exe
+            native-v2.1/build-win/Release/AIRIDMBridge.exe
+            native-v2.1/browser-extension/**
+            native-v2.1/SHA256SUMS.txt
