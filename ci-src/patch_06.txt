@@ -1,0 +1,121 @@
+c/bridge/main.cpp
+index 8c5f4d9..9c0bc14 100644
+--- a/src/bridge/main.cpp
++++ b/src/bridge/main.cpp
+@@ -30,7 +30,9 @@ std::wstring quote(const std::wstring& s){ return L"\""+s+L"\""; }
+ bool deliver(const std::string& payload) {
+     if (HWND h = FindWindowW(kMainClass,nullptr)) {
+         COPYDATASTRUCT cd{}; cd.dwData=0x41495249; cd.cbData=static_cast<DWORD>(payload.size()+1); cd.lpData=const_cast<char*>(payload.c_str());
+-        DWORD_PTR result=0; return SendMessageTimeoutW(h,WM_COPYDATA,0,reinterpret_cast<LPARAM>(&cd),SMTO_ABORTIFHUNG,3000,&result)!=0;
++        DWORD_PTR result=0;
++        const auto delivered = SendMessageTimeoutW(h,WM_COPYDATA,0,reinterpret_cast<LPARAM>(&cd),SMTO_ABORTIFHUNG,5000,&result)!=0;
++        return delivered && result == TRUE;
+     }
+     wchar_t tmp[MAX_PATH]{}; GetTempPathW(MAX_PATH,tmp);
+     auto file=std::filesystem::path(tmp)/(L"airidm-native-"+std::to_wstring(GetCurrentProcessId())+L".json");
+@@ -53,7 +55,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
+         if(len==0||len>8*1024*1024) break;
+         std::string payload(len,'\0'); if(!read_exact(in,payload.data(),len)) break;
+         bool ok=deliver(payload);
+-        std::string response=airi::json::flat_object({{"bridge","AIRI Native C++"},{"message",ok?"Accepted by AIRI Desktop":"AIRI Desktop handoff failed"}},{{"ok",ok}});
++        std::string response=airi::json::flat_object({{"bridge","AIRI Native C++ v2.1"},{"message",ok?"Queued by AIRI Desktop":"AIRI Desktop rejected the request"}},{{"ok",ok}});
+         std::uint32_t rlen=static_cast<std::uint32_t>(response.size());
+         if(!write_exact(out,&rlen,sizeof(rlen))||!write_exact(out,response.data(),rlen)) break;
+     }
+diff --git a/src/engine/media_worker.cpp b/src/engine/media_worker.cpp
+index 2781e12..ae3605c 100644
+--- a/src/engine/media_worker.cpp
++++ b/src/engine/media_worker.cpp
+@@ -1,10 +1,8 @@
+ #ifdef _WIN32
+ #include "engine/media_worker.h"
+ #include <windows.h>
+-#include <shlobj.h>
+ #include <algorithm>
+ #include <array>
+-#include <charconv>
+ #include <filesystem>
+ #include <string>
+ #include <vector>
+@@ -19,10 +17,23 @@ std::wstring utf8_to_wide(const std::string& s) {
+     return out;
+ }
+ std::wstring q(const std::wstring& s) { return L"\"" + s + L"\""; }
++std::wstring app_dir() {
++    std::wstring buf(32768, L'\0');
++    DWORD n = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
++    buf.resize(n);
++    return std::filesystem::path(buf).parent_path().wstring();
++}
+ std::wstring format_for(const std::string& quality, bool has_ffmpeg) {
++    if (quality == "audio") return has_ffmpeg ? L"ba/b" : L"ba/b";
++    auto progressive = [&](int h) {
++        return L"best[height<=" + std::to_wstring(h) + L"][vcodec!=none][acodec!=none]/best[height<=" + std::to_wstring(h) + L"]/best";
++    };
+     if (!has_ffmpeg) {
+-        if (quality == "360p") return L"best[height<=360][vcodec!=none][acodec!=none]/best[height<=360]/best";
+-        if (quality == "720p") return L"best[height<=720][vcodec!=none][acodec!=none]/best[height<=720]/best";
++        if (quality == "360p") return progressive(360);
++        if (quality == "720p") return progressive(720);
++        if (quality == "1080p") return progressive(1080);
++        if (quality == "1440p") return progressive(1440);
++        if (quality == "2160p" || quality == "4k") return progressive(2160);
+         return L"best[vcodec!=none][acodec!=none]/best";
+     }
+     if (quality == "360p") return L"bv*[height<=360]+ba/b[height<=360]";
+@@ -30,49 +41,71 @@ std::wstring format_for(const std::string& quality, bool has_ffmpeg) {
+     if (quality == "1080p") return L"bv*[height<=1080]+ba/b[height<=1080]";
+     if (quality == "1440p") return L"bv*[height<=1440]+ba/b[height<=1440]";
+     if (quality == "2160p" || quality == "4k") return L"bv*[height<=2160]+ba/b[height<=2160]";
+-    if (quality == "audio") return L"ba/b";
+     return L"bv*+ba/b";
+ }
++std::wstring escape_arg_value(std::wstring v) {
++    // Values are placed inside quoted command-line arguments. Strip CR/LF and escape quotes.
++    v.erase(std::remove(v.begin(), v.end(), L'\r'), v.end());
++    v.erase(std::remove(v.begin(), v.end(), L'\n'), v.end());
++    std::wstring out; out.reserve(v.size() + 8);
++    for (wchar_t c : v) { if (c == L'\"') out += L"\\\""; else out += c; }
++    return out;
++}
+ }
+ 
+-std::filesystem::path MediaWorker::tool_path() {
+-    wchar_t local[MAX_PATH]{};
+-    SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, local);
+-    return std::filesystem::path(local) / L"AIRI Download Manager" / L"tools" / L"yt-dlp.exe";
++std::filesystem::path MediaWorker::tools_directory() {
++    return std::filesystem::path(app_dir()) / L"tools";
+ }
++std::filesystem::path MediaWorker::tool_path() { return tools_directory() / L"yt-dlp.exe"; }
+ bool MediaWorker::available() { return std::filesystem::exists(tool_path()); }
+ 
+ bool MediaWorker::download(const MediaRequest& r, Callback cb) {
++    auto tools = tools_directory();
+     auto yt = tool_path();
+     if (!std::filesystem::exists(yt)) {
+-        if (cb) cb({0, "Media engine unavailable", "yt-dlp.exe is not installed in AIRI tools."});
++        if (cb) cb({0, "Failed", "AIRI media engine is missing. Reinstall AIRI Download Manager."});
+         return false;
+     }
+-    wchar_t local[MAX_PATH]{}; SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, local);
+-    auto ffmpeg = std::filesystem::path(local) / L"AIRI Download Manager" / L"tools" / L"ffmpeg.exe";
++    auto ffmpeg = tools / L"ffmpeg.exe";
++    auto deno = tools / L"deno.exe";
+     bool has_ffmpeg = std::filesystem::exists(ffmpeg);
++    bool has_deno = std::filesystem::exists(deno);
+     std::error_code ec; std::filesystem::create_directories(r.save_directory, ec);
+ 
+-    std::wstring cmd = q(yt) + L" --newline --no-playlist --windows-filenames --no-color --progress-template \"download:%(progress._percent_str)s\" ";
++    std::wstring cmd = q(yt) + L" --ignore-config --newline --no-playlist --windows-filenames --no-color";
++    cmd += L" --progress-template \"download:%(progress._percent_str)s\"";
++    cmd += L" --output \"%(title).180B [%(id)s].%(ext)s\"";
+     cmd += L" -P " + q(r.save_directory.wstring());
+     cmd += L" -f " + q(format_for(r.quality, has_ffmpeg));
+-    if (has_ffmpeg) cmd += L" --ffmpeg-location " + q(ffmpeg.parent_path().wstring()) + L" --merge-output-format mp4";
++    if (has_deno) cmd += L" --js-runtimes " + q(L"deno:" + deno.wstring());
++    if (has_ffmpeg) cmd += L" --ffmpeg-location " + q(tools.wstring()) + L" --merge-output-format mp4";
++    if (!r.user_agent.empty()) cmd += L" --user-agent " + q(escape_arg_value(utf8_to_wide(r.user_agent)));
++    if (!r.referer.empty()) cmd += L" --referer " + q(escape_arg_value(utf8_to_wide(r.referer)));
++    if (!r.cookie.empty()) cmd += L" --add-headers " + q(L"Cookie:" + escape_arg_value(utf8_to_wide(r.cookie)));
+     cmd += L" " + q(utf8_to_wide(r.page_url));
