@@ -1,0 +1,84 @@
+ew_SetItemState(g_list, inserted, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
++            if (!j.finished && !j.failed) ++active;
++            ++row;
++        }
++    }
++    std::wstring notice;
++    { std::scoped_lock lock(g_notice_mutex); notice = g_notice; }
++    std::wstring st = L"AIRI Native Engine | " + std::to_wstring(active) + L" active | " + u8w(airi::text::human_bytes(static_cast<unsigned long long>(total_speed))) + L"/s | " + notice;
+     SendMessageW(g_status, SB_SETTEXTW, 0, reinterpret_cast<LPARAM>(st.c_str()));
++    update_button_state();
+ }
+ 
+ void layout(HWND h) {
+-    RECT r{}; GetClientRect(h,&r); int w=r.right, hgt=r.bottom; int header=82, status=28, sidebar=190;
+-    MoveWindow(g_header,0,0,w,header,TRUE);
+-    MoveWindow(g_sidebar,0,header,sidebar,hgt-header-status,TRUE);
+-    MoveWindow(g_list,sidebar,header,w-sidebar,hgt-header-status,TRUE);
+-    MoveWindow(g_status,0,hgt-status,w,status,TRUE);
++    RECT r{}; GetClientRect(h, &r); int w = r.right, hgt = r.bottom; int header = 82, status = 28, sidebar = 190;
++    MoveWindow(g_header, 0, 0, w, header, TRUE);
++    MoveWindow(g_sidebar, 0, header, sidebar, hgt - header - status, TRUE);
++    MoveWindow(g_list, sidebar, header, w - sidebar, hgt - header - status, TRUE);
++    MoveWindow(g_status, 0, hgt - status, w, status, TRUE);
++}
++
++void open_download_folder(std::uint64_t id) {
++    std::filesystem::path folder = default_downloads();
++    if (id && is_media_id(id)) {
++        if (auto j = media_job(id); j && !j->directory.empty()) folder = j->directory;
++    } else if (id) {
++        if (auto task = g_manager->find(id)) {
++            auto s = task->snapshot(); if (!s.output_path.empty()) folder = s.output_path.parent_path();
++        }
++    }
++    ShellExecuteW(g_main, L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
++    set_notice(L"Opened download folder.");
+ }
+ 
+ LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+     switch (m) {
+         case WM_CREATE: {
+-            g_main=h;
+-            g_header=CreateWindowW(L"STATIC", L"AIRI Download Manager\r\nNative C++ Engine · All file types · Silent background workers", WS_CHILD|WS_VISIBLE, 0,0,0,0,h,nullptr,nullptr,nullptr);
++            g_main = h;
++            g_header = CreateWindowW(L"STATIC", L"AIRI Download Manager\r\nNative C++ Engine - All file types - Silent background workers", WS_CHILD | WS_VISIBLE, 0,0,0,0,h,nullptr,nullptr,nullptr);
+             SendMessageW(g_header, WM_SETFONT, reinterpret_cast<WPARAM>(g_title_font), TRUE);
+-            int x=365;
+-            auto btn=[&](int id,const wchar_t* t,int width){ HWND b=CreateWindowW(L"BUTTON",t,WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,x,23,width,34,h,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),nullptr,nullptr); SendMessageW(b,WM_SETFONT,reinterpret_cast<WPARAM>(g_font),TRUE); x+=width+8; };
+-            btn(ID_ADD,L"+ Add URL",98); btn(ID_RESUME,L"Resume",82); btn(ID_PAUSE,L"Pause",78); btn(ID_CANCEL,L"Cancel",78); btn(ID_OPEN,L"Open folder",105);
+-            g_sidebar=CreateWindowExW(0,L"LISTBOX",nullptr,WS_CHILD|WS_VISIBLE|LBS_NOINTEGRALHEIGHT|WS_VSCROLL,0,0,0,0,h,nullptr,nullptr,nullptr);
++            int x = 365;
++            auto btn = [&](HWND& out, int id, const wchar_t* t, int width) {
++                out = CreateWindowW(L"BUTTON", t, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON, x,23,width,34,h,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),nullptr,nullptr);
++                SendMessageW(out, WM_SETFONT, reinterpret_cast<WPARAM>(g_font), TRUE); x += width + 8;
++            };
++            btn(g_btn_add, ID_ADD, L"+ Add URL", 98); btn(g_btn_resume, ID_RESUME, L"Resume",82); btn(g_btn_pause, ID_PAUSE,L"Pause",78); btn(g_btn_cancel,ID_CANCEL,L"Cancel",78); btn(g_btn_open,ID_OPEN,L"Open folder",105);
++            g_sidebar = CreateWindowExW(0,L"LISTBOX",nullptr,WS_CHILD|WS_VISIBLE|LBS_NOINTEGRALHEIGHT|LBS_NOTIFY|WS_VSCROLL,0,0,0,0,h,reinterpret_cast<HMENU>(ID_SIDEBAR),nullptr,nullptr);
+             for (auto s : {L"  All downloads",L"  Downloading",L"  Completed",L"",L"  PROGRAMS",L"  VIDEO",L"  AUDIO",L"  DOCUMENTS",L"  ARCHIVES",L"  OTHER / UNKNOWN"}) SendMessageW(g_sidebar,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(s));
+             SendMessageW(g_sidebar,LB_SETCURSEL,0,0); SendMessageW(g_sidebar,WM_SETFONT,reinterpret_cast<WPARAM>(g_font),TRUE);
+-            g_list=CreateWindowExW(WS_EX_CLIENTEDGE,WC_LISTVIEWW,L"",WS_CHILD|WS_VISIBLE|LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS,0,0,0,0,h,nullptr,nullptr,nullptr);
+-            SendMessageW(g_list,WM_SETFONT,reinterpret_cast<WPARAM>(g_font),TRUE); ListView_SetExtendedListViewStyle(g_list,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER|LVS_EX_GRIDLINES);
++            g_list = CreateWindowExW(WS_EX_CLIENTEDGE,WC_LISTVIEWW,L"",WS_CHILD|WS_VISIBLE|LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS,0,0,0,0,h,reinterpret_cast<HMENU>(ID_LIST),nullptr,nullptr);
++            SendMessageW(g_list,WM_SETFONT,reinterpret_cast<WPARAM>(g_font),TRUE);
++            ListView_SetExtendedListViewStyle(g_list,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER|LVS_EX_GRIDLINES);
+             ListView_SetBkColor(g_list,RGB(252,249,242)); ListView_SetTextBkColor(g_list,RGB(252,249,242)); ListView_SetTextColor(g_list,RGB(30,43,63));
+-            struct Col{const wchar_t* t;int w;} cols[]={{L"Name",330},{L"Size",100},{L"Status",110},{L"Progress",85},{L"Speed",110},{L"Type",90}};
++            struct Col{const wchar_t* t;int w;} cols[]={{L"Name",330},{L"Size",100},{L"Status",120},{L"Progress",85},{L"Speed",110},{L"Type",110}};
+             for(int i=0;i<6;++i){LVCOLUMNW c{};c.mask=LVCF_TEXT|LVCF_WIDTH;c.pszText=const_cast<wchar_t*>(cols[i].t);c.cx=cols[i].w;ListView_InsertColumn(g_list,i,&c);}
+-            g_status=CreateStatusWindowW(WS_CHILD|WS_VISIBLE,L"Ready",h,4001); SendMessageW(g_status,WM_SETFONT,reinterpret_cast<WPARAM>(g_font),TRUE);
+-            SetTimer(h,1,500,nullptr); layout(h); return 0;
++            g_status = CreateStatusWindowW(WS_CHILD|WS_VISIBLE,L"Ready",h,4001); SendMessageW(g_status,WM_SETFONT,reinterpret_cast<WPARAM>(g_font),TRUE);
++            SetTimer(h,1,500,nullptr); layout(h); update_button_state(); return 0;
+         }
+         case WM_SIZE: layout(h); return 0;
+         case WM_TIMER: refresh_list(); return 0;
+         case WM_AIRI_REFRESH: refresh_list(); return 0;
+-        case WM_AIRI_MEDIA: {
+-            std::unique_ptr<std::wstring> msg(reinterpret_cast<std::wstring*>(l));
+-            std::wstring st=L"Media " + std::to_wstring(static_cast<int>(w)) + L"%  •  " + (msg?*msg:L"");
+-            SendMessageW(g_status,SB_SETTEXTW,0,reinterpret_cast<LPARAM>(st.c_str())); return 0;
+-        }
++        case WM_AIRI_MEDIA: refresh_list(); return 0;
+         case WM_COPYDATA: {
+-            auto* cd=reinterpret_cast<COPYDATASTRUCT*>(l); if(cd && cd->lpData && cd->cbData){ std::string raw(reinterpret_cast<const char*>(cd->lpData), cd->cbData); if(!raw.empty()&&raw.back()=='\0')raw.pop_back(); handle_payload(ra
