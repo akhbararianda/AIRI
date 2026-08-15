@@ -1,1 +1,1 @@
-AIRI Native v2 Windows build trigger 2026-08-15
+AIRI Native v2 Windows build trigger after complete source bundle 2026-08-15 19:38 WIB
