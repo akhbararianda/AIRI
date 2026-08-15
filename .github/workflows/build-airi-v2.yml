@@ -28,9 +28,12 @@ jobs:
         shell: powershell
         run: |
           $patches = Get-ChildItem ci-src\patch_*.txt | Sort-Object Name
-          ($patches | ForEach-Object { Get-Content $_.FullName -Raw }) -join '' | Set-Content -NoNewline airi-v2.1.patch
-          git apply --check --directory=native-src airi-v2.1.patch
-          git apply --directory=native-src airi-v2.1.patch
+          $text = ($patches | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join ''
+          $text = $text.Replace("`r`n", "`n")
+          $utf8 = New-Object System.Text.UTF8Encoding($false)
+          [IO.File]::WriteAllText((Join-Path $PWD 'airi-v2.1.patch'), $text, $utf8)
+          git apply --check --whitespace=nowarn --directory=native-src airi-v2.1.patch
+          git apply --whitespace=nowarn --directory=native-src airi-v2.1.patch
 
       - name: Configure x64
         shell: powershell
