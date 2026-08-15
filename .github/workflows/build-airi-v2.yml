@@ -1,0 +1,76 @@
+name: Build AIRI Download Manager v2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ci-src/**'
+      - '.github/workflows/build-airi-v2.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct native source
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force native-src | Out-Null
+          $parts = Get-ChildItem ci-src\chunk_*.txt | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('airi-native-source.tar.xz', [Convert]::FromBase64String($b64))
+          tar -xf airi-native-source.tar.xz -C native-src
+          Get-ChildItem native-src
+
+      - name: Configure x64
+        shell: powershell
+        run: cmake -S native-src -B native-src\build-win -A x64
+
+      - name: Build Release
+        shell: powershell
+        run: cmake --build native-src\build-win --config Release --parallel
+
+      - name: Run core tests
+        shell: powershell
+        run: ctest --test-dir native-src\build-win -C Release --output-on-failure
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Setup EXE
+        shell: powershell
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" native-src\installer\AIRI-DM-Native.iss'
+
+      - name: Verify Windows binaries
+        shell: powershell
+        run: |
+          Get-Item 'native-src\build-win\Release\AIRI Download Manager.exe' | Format-List Name,Length
+          Get-Item 'native-src\build-win\Release\AIRIDMBridge.exe' | Format-List Name,Length
+          Get-Item 'native-src\installer\Output\AIRI-Download-Manager-Setup-v2.exe' | Format-List Name,Length
+
+      - name: Create SHA256
+        shell: powershell
+        run: |
+          $files = @(
+            'native-src\installer\Output\AIRI-Download-Manager-Setup-v2.exe',
+            'native-src\build-win\Release\AIRI Download Manager.exe',
+            'native-src\build-win\Release\AIRIDMBridge.exe'
+          )
+          $lines = foreach ($f in $files) { $h = Get-FileHash $f -Algorithm SHA256; "$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))" }
+          $lines | Set-Content native-src\SHA256SUMS.txt
+
+      - name: Upload AIRI v2 Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIRI-Download-Manager-v2-Windows
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            native-src/installer/Output/AIRI-Download-Manager-Setup-v2.exe
+            native-src/build-win/Release/AIRI Download Manager.exe
+            native-src/build-win/Release/AIRIDMBridge.exe
+            native-src/SHA256SUMS.txt
