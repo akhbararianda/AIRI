@@ -1,0 +1,93 @@
+
+     SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
+     HANDLE read_pipe = nullptr, write_pipe = nullptr;
+-    if (!CreatePipe(&read_pipe, &write_pipe, &sa, 0)) return false;
++    if (!CreatePipe(&read_pipe, &write_pipe, &sa, 0)) {
++        if (cb) cb({0, "Failed", "Could not create media worker pipe."});
++        return false;
++    }
+     SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0);
+     STARTUPINFOW si{}; si.cb = sizeof(si); si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+     si.wShowWindow = SW_HIDE; si.hStdOutput = write_pipe; si.hStdError = write_pipe; si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+     PROCESS_INFORMATION pi{};
+     std::vector<wchar_t> mutable_cmd(cmd.begin(), cmd.end()); mutable_cmd.push_back(L'\0');
+-    BOOL ok = CreateProcessW(nullptr, mutable_cmd.data(), nullptr, nullptr, TRUE,
+-                             CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, nullptr, nullptr, &si, &pi);
++    BOOL ok = CreateProcessW(yt.c_str(), mutable_cmd.data(), nullptr, nullptr, TRUE,
++                             CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, nullptr, tools.c_str(), &si, &pi);
+     CloseHandle(write_pipe);
+-    if (!ok) { CloseHandle(read_pipe); if (cb) cb({0,"Failed","Could not start media engine."}); return false; }
+-    if (cb) cb({0,"Preparing","AIRI media worker started silently."});
++    if (!ok) {
++        CloseHandle(read_pipe);
++        if (cb) cb({0, "Failed", "Could not start AIRI media engine."});
++        return false;
++    }
++    if (cb) cb({0, "Preparing", has_deno ? "Media engine started with bundled JavaScript runtime." : "Media engine started."});
+     std::string pending; std::array<char,4096> buf{};
++    std::string last_detail;
+     while (true) {
+         DWORD avail = 0;
+         if (!PeekNamedPipe(read_pipe, nullptr, 0, nullptr, &avail, nullptr)) break;
+@@ -83,10 +116,17 @@ bool MediaWorker::download(const MediaRequest& r, Callback cb) {
+             std::size_t pos;
+             while ((pos = pending.find_first_of("\r\n")) != std::string::npos) {
+                 std::string line = pending.substr(0, pos); pending.erase(0, pos + 1);
++                if (line.empty()) continue;
++                last_detail = line;
+                 if (line.rfind("download:", 0) == 0) {
+-                    std::string pct = line.substr(9); pct.erase(std::remove_if(pct.begin(), pct.end(), [](char c){ return c=='%' || c==' '; }), pct.end());
++                    std::string pct = line.substr(9);
++                    pct.erase(std::remove_if(pct.begin(), pct.end(), [](char c){ return c=='%' || c==' '; }), pct.end());
+                     try { if (cb) cb({static_cast<int>(std::stod(pct)), "Downloading", line}); } catch (...) {}
+-                } else if (cb && !line.empty()) cb({0,"Working",line});
++                } else if (line.find("ERROR:") != std::string::npos) {
++                    if (cb) cb({0, "Failed", line});
++                } else if (cb) {
++                    cb({0, "Working", line});
++                }
+             }
+         }
+         DWORD wait = WaitForSingleObject(pi.hProcess, avail ? 0 : 100);
+@@ -94,7 +134,8 @@ bool MediaWorker::download(const MediaRequest& r, Callback cb) {
+     }
+     DWORD code = 1; GetExitCodeProcess(pi.hProcess, &code);
+     CloseHandle(read_pipe); CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+-    if (cb) cb({code == 0 ? 100 : 0, code == 0 ? "Completed" : "Failed", code == 0 ? "Media download completed." : "Media engine returned an error."});
++    if (cb) cb({code == 0 ? 100 : 0, code == 0 ? "Completed" : "Failed",
++                code == 0 ? "Media download completed." : (last_detail.empty() ? "Media engine returned an error." : last_detail)});
+     return code == 0;
+ }
+ }
+diff --git a/src/engine/media_worker.h b/src/engine/media_worker.h
+index f78fa05..733f950 100644
+--- a/src/engine/media_worker.h
++++ b/src/engine/media_worker.h
+@@ -8,20 +8,20 @@ namespace airi {
+ struct MediaRequest {
+     std::string page_url;
+     std::string title;
+-    std::string quality;
++    std::string quality = "best";
+     std::filesystem::path save_directory;
++    std::string cookie;
++    std::string referer;
++    std::string user_agent;
+ };
+-struct MediaProgress {
+-    int percent{};
+-    std::string status;
+-    std::string detail;
+-};
++struct MediaProgress { int percent{}; std::string status; std::string detail; };
+ class MediaWorker {
+ public:
+     using Callback = std::function<void(const MediaProgress&)>;
+     static bool available();
++    static bool download(const MediaRequest& request, Callback cb);
+     static std::filesystem::path tool_path();
+-    static bool download(const MediaRequest& request, Callback callback);
++    static std::filesystem::path tools_directory();
+ };
+ }
+ #endif
