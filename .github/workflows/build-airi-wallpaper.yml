@@ -2,7 +2,7 @@ name: Build AIRI Wallpaper APK
 
 on:
   push:
-    branches: [ "airi-wallpaper-v1" ]
+    branches: [ "airi-wallpaper-v2" ]
     paths:
       - 'android-wallpaper/**'
       - '.github/workflows/build-airi-wallpaper.yml'
@@ -29,9 +29,9 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Copy friendly APK name
-        run: cp app/build/outputs/apk/debug/app-debug.apk AIRI-Wallpaper-v1.0.0-debug.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk AIRI-Wallpaper-v2.0.0-2000-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Wallpaper-v1.0.0-APK
-          path: android-wallpaper/AIRI-Wallpaper-v1.0.0-debug.apk
+          name: AIRI-Wallpaper-v2.0.0-2000-APK
+          path: android-wallpaper/AIRI-Wallpaper-v2.0.0-2000-debug.apk
           if-no-files-found: error
