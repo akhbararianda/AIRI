@@ -1,0 +1,40 @@
+name: Build AIRI OS 26.6 Android Stable
+on:
+  workflow_dispatch:
+  push:
+    branches: [ airi-os-266-android-stable ]
+    paths:
+      - 'android-airi-os/**'
+      - '.github/workflows/build-airi-os-266-android.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build APK
+        working-directory: android-airi-os
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Verify APK
+        run: |
+          APK=android-airi-os/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          ls -lh "$APK"
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | head -n 20
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose "$APK"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIRI-iOS-26.6-Stable-v4-Realme3Pro
+          path: android-airi-os/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
