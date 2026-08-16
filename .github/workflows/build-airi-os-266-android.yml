@@ -30,11 +30,12 @@ jobs:
           APK=android-airi-os/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
           ls -lh "$APK"
-          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | head -n 20
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | head -n 25
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose "$APK"
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | grep "package: name='com.airi.ios266stable2'"
       - uses: actions/upload-artifact@v4
         with:
-          name: AIRI-iOS-26.6-Premium-v5-Realme3Pro
+          name: AIRI-iOS-26.6-Stable-2-Realme3Pro
           path: android-airi-os/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
