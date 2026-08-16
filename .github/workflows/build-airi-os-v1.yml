@@ -1,0 +1,46 @@
+name: Build AIRI OS v1 APK
+
+on:
+  push:
+    branches: [airi-os-v1]
+    paths:
+      - 'airi-os/**'
+      - '.github/workflows/build-airi-os-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: airi-os
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Rename APK
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v1.0-RMX1851.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIRI-OS-v1.0-RMX1851
+          path: AIRI-OS-v1.0-RMX1851.apk
+          if-no-files-found: error
+          retention-days: 30
