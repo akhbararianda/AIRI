@@ -29,6 +29,7 @@ public class MainActivity extends Activity {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         setContentView(webView);
 
         WebSettings s = webView.getSettings();
@@ -57,7 +58,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.loadUrl("file:///android_asset/index.html");
+        if (savedInstanceState == null) {
+            webView.loadUrl("file:///android_asset/index.html");
+        } else {
+            webView.restoreState(savedInstanceState);
+        }
     }
 
     private void configureWindow() {
@@ -78,6 +83,26 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        configureWindow();
+        if (webView != null) webView.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        if (webView != null) webView.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        if (webView != null) webView.saveState(outState);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
         configureWindow();
     }
 
@@ -101,13 +126,20 @@ public class MainActivity extends Activity {
         try {
             Intent intent = getPackageManager().getLaunchIntentForPackage(pkg);
             if (intent == null) {
-                if ("com.android.contacts".equals(pkg)) intent = new Intent(Intent.ACTION_DIAL);
-                else if ("com.android.mms".equals(pkg)) intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING);
-                else if ("com.oppo.camera".equals(pkg)) intent = new Intent("android.media.action.IMAGE_CAPTURE");
-                else if ("com.coloros.filemanager".equals(pkg)) intent = new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);
+                if ("com.android.contacts".equals(pkg)) {
+                    intent = getPackageManager().getLaunchIntentForPackage("com.android.dialer");
+                    if (intent == null) intent = new Intent(Intent.ACTION_DIAL);
+                } else if ("com.android.mms".equals(pkg)) {
+                    intent = getPackageManager().getLaunchIntentForPackage("com.google.android.apps.messaging");
+                    if (intent == null) intent = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING);
+                } else if ("com.oppo.camera".equals(pkg)) {
+                    intent = new Intent("android.media.action.IMAGE_CAPTURE");
+                } else if ("com.coloros.filemanager".equals(pkg)) {
+                    intent = new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);
+                }
             }
             if (intent == null) { show("Aplikasi belum tersedia di perangkat"); return; }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
             startActivity(intent);
         } catch (ActivityNotFoundException e) {
             show("Aplikasi tidak ditemukan");
@@ -122,7 +154,13 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else moveTaskToBack(true);
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            Intent home = new Intent(Intent.ACTION_MAIN);
+            home.addCategory(Intent.CATEGORY_HOME);
+            home.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try { startActivity(home); } catch (Exception e) { moveTaskToBack(true); }
+        }
     }
 }
