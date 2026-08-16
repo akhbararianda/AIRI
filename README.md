@@ -1,2 +1,0 @@
-# AIRI
-airi dm
