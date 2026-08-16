@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "AIRI Download Manager Integration",
-  "version": "3.1.0",
-  "description": "Native Windows integration for AIRI Download Manager v2.1. Captures all HTTP/HTTPS downloads and sends media jobs to the desktop engine.",
+  "version": "3.2.0",
+  "description": "Native Windows integration for AIRI Download Manager v2.2 Turbo.",
   "permissions": ["downloads", "nativeMessaging", "storage", "contextMenus", "cookies"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "service-worker.js"},
   "content_scripts": [{"matches": ["https://www.youtube.com/*", "https://youtube.com/*"], "js": ["youtube-overlay.js"], "css": ["youtube-overlay.css"], "run_at": "document_idle"}],
-  "action": {"default_title": "AIRI Download Manager", "default_popup": "popup.html"},
+  "action": {
+    "default_title": "AIRI Download Manager",
+    "default_popup": "popup.html",
+    "default_icon": {"16":"icons/icon16.png","32":"icons/icon32.png","48":"icons/icon48.png","128":"icons/icon128.png"}
+  },
+  "icons": {"16":"icons/icon16.png","32":"icons/icon32.png","48":"icons/icon48.png","128":"icons/icon128.png"},
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0rxLbc5KrxlVjy1XP9x8aiYFHp72s8pDmxJvrQyS6/8RIMSFqepRtwezWtpArYMTUMPzGUqWMFvMgiBRQmXzriaHHXtTyrrE0B/RNughhPSguIHNnvL6xJcD96dKRAo7nXq+rluRZWkG9Jh/XzHhGUKVHg/0xBsBXjz6JSR2tEm4Ny0rf5KTktjf6j8J+oefwvQ/SDJH2PI88pMn/mQHmYWpAbUJCmzRt2RFJbSkEIFPWPbp6TNWFcM+JWpH9PYWWgwBrghdvRrW5p3K+eBfnfvDQ6OAmqwZsO4ayPJi/NMY2Cy5mPAIEYqzADc4tvvJtYXTMi52n4gzI+h5TaD4/QIDAQAB"
 }
