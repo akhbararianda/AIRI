@@ -34,7 +34,7 @@ jobs:
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose "$APK"
       - uses: actions/upload-artifact@v4
         with:
-          name: AIRI-iOS-26.6-Stable-v4-Realme3Pro
+          name: AIRI-iOS-26.6-Premium-v5-Realme3Pro
           path: android-airi-os/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
