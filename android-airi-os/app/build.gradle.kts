@@ -8,8 +8,8 @@ android {
         applicationId = "com.airi.ios266stable"
         minSdk = 23
         targetSdk = 29
-        versionCode = 4
-        versionName = "26.6.4-stable"
+        versionCode = 5
+        versionName = "26.6.5-premium"
     }
 
     buildTypes {
