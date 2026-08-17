@@ -22,6 +22,8 @@
         <activity android:name=".CircleSearchActivity" android:exported="false" />
         <activity android:name=".WallpaperLabActivity" android:exported="false" />
         <activity android:name=".AiriWallpaperActivity" android:exported="false" />
+        <activity android:name=".WallpaperPackActivity" android:exported="false" />
+        <activity android:name=".MotionCenterActivity" android:exported="false" />
         <activity android:name=".StableSetupActivity" android:exported="false" />
         <activity android:name=".AiriSettingsActivity" android:exported="false" />
         <activity android:name=".ThemeCenterActivity" android:exported="false" />
