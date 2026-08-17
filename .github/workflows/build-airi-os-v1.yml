@@ -1,8 +1,8 @@
-name: Build AIRI OS v8 Stable Complete APK
+name: Build AIRI OS v9 Fusion Complete APK
 
 on:
   push:
-    branches: [airi-os-v8-stable-complete]
+    branches: [airi-os-v9-fusion-complete]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
@@ -35,12 +35,12 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Rename APK
-        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v8.0-Stable-Complete-RMX1851.apk
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v9.0-Fusion-Complete-RMX1851.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-OS-v8.0-Stable-Complete-RMX1851
-          path: AIRI-OS-v8.0-Stable-Complete-RMX1851.apk
+          name: AIRI-OS-v9.0-Fusion-Complete-RMX1851
+          path: AIRI-OS-v9.0-Fusion-Complete-RMX1851.apk
           if-no-files-found: error
           retention-days: 30
