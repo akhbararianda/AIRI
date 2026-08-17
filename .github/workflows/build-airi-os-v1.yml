@@ -1,8 +1,8 @@
-name: Build AIRI OS v5 Liquid 26.6 APK
+name: Build AIRI OS v6 Liquid Depth APK
 
 on:
   push:
-    branches: [airi-os-v5-liquid-26-6]
+    branches: [airi-os-v6-liquid-depth]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
@@ -35,12 +35,12 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Rename APK
-        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v5.0-Liquid-26.6-RMX1851.apk
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v6.0-Liquid-Depth-26.6-RMX1851.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-OS-v5.0-Liquid-26.6-RMX1851
-          path: AIRI-OS-v5.0-Liquid-26.6-RMX1851.apk
+          name: AIRI-OS-v6.0-Liquid-Depth-26.6-RMX1851
+          path: AIRI-OS-v6.0-Liquid-Depth-26.6-RMX1851.apk
           if-no-files-found: error
           retention-days: 30
