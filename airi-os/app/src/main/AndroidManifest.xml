@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <queries>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
@@ -20,6 +21,8 @@
         <activity android:name=".SmartEraserActivity" android:exported="false" />
         <activity android:name=".CircleSearchActivity" android:exported="false" />
         <activity android:name=".WallpaperLabActivity" android:exported="false" />
+        <activity android:name=".AiriWallpaperActivity" android:exported="false" />
+        <activity android:name=".StableSetupActivity" android:exported="false" />
         <activity android:name=".IntelligenceHubActivity" android:exported="false" />
         <activity android:name=".GalleryLabActivity" android:exported="false" />
         <activity android:name=".PerformanceCenterActivity" android:exported="false" />
