@@ -5,11 +5,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.airi.ios266stable6"
+        applicationId = "com.airi.ios266stable7"
         minSdk = 23
-        targetSdk = 29
-        versionCode = 600
-        versionName = "26.6.10-stable6-native-core"
+        targetSdk = 35
+        versionCode = 700
+        versionName = "26.6.11-stable7-owner-rmx1851"
     }
 
     buildTypes {
