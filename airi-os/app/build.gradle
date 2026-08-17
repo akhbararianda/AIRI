@@ -10,8 +10,8 @@ android {
         applicationId 'id.airi.os'
         minSdk 23
         targetSdk 35
-        versionCode 5
-        versionName '5.0.0-liquid-26.6'
+        versionCode 6
+        versionName '6.0.0-liquid-depth-26.6'
     }
 
     buildTypes {
