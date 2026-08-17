@@ -16,10 +16,8 @@ import android.os.Environment;
 import android.os.StatFs;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
-import android.view.DisplayCutout;
 import android.view.View;
 import android.view.Window;
-import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
@@ -73,7 +71,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void openCamera(){runOnUiThread(()->startActivity(new Intent(MainActivity.this,CameraActivity.class)));}
         @JavascriptInterface public void openAppInfo(String p){runOnUiThread(()->MainActivity.this.openAppInfo(p));}
         @JavascriptInterface public void openHomeSettings(){runOnUiThread(()->{try{startActivity(new Intent(Settings.ACTION_HOME_SETTINGS));}catch(Exception e){show("Menu launcher default tidak tersedia");}});}
-        @JavascriptInterface public void openPanel(String panel){runOnUiThread(()->{try{Intent i;if("wifi".equals(panel)){if(Build.VERSION.SDK_INT>=29)i=new Intent(Settings.Panel.ACTION_WIFI);else i=new Intent(Settings.ACTION_WIFI_SETTINGS);}else if("bluetooth".equals(panel))i=new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);else if("display".equals(panel))i=new Intent(Settings.ACTION_DISPLAY_SETTINGS);else if("focus".equals(panel))i=new Intent(Settings.ACTION_ZEN_MODE_SETTINGS);else i=new Intent(Settings.ACTION_SETTINGS);startActivity(i);}catch(Exception e){show("Panel sistem tidak tersedia");}});}
+        @JavascriptInterface public void openPanel(String panel){runOnUiThread(()->{try{Intent i;if("wifi".equals(panel)){if(Build.VERSION.SDK_INT>=29)i=new Intent(Settings.Panel.ACTION_WIFI);else i=new Intent(Settings.ACTION_WIFI_SETTINGS);}else if("bluetooth".equals(panel))i=new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);else if("display".equals(panel))i=new Intent(Settings.ACTION_DISPLAY_SETTINGS);else if("focus".equals(panel))i=new Intent("android.settings.ZEN_MODE_SETTINGS");else i=new Intent(Settings.ACTION_SETTINGS);startActivity(i);}catch(Exception e){show("Panel sistem tidak tersedia");}});}
         @JavascriptInterface public void setBrightness(int value){runOnUiThread(()->{WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=Math.max(.05f,Math.min(1f,value/100f));getWindow().setAttributes(lp);});}
         @JavascriptInterface public void setVolume(int value){runOnUiThread(()->{AudioManager am=(AudioManager)getSystemService(AUDIO_SERVICE);if(am!=null){int max=am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);am.setStreamVolume(AudioManager.STREAM_MUSIC,Math.round(max*Math.max(0,Math.min(100,value))/100f),0);}});}
         @JavascriptInterface public String getInstalledApps(){JSONArray out=new JSONArray();try{PackageManager pm=getPackageManager();List<ApplicationInfo> all=pm.getInstalledApplications(PackageManager.GET_META_DATA),ls=new ArrayList<>();for(ApplicationInfo ai:all){if(ai.packageName.equals(getPackageName())||ai.packageName.startsWith("com.airi.ios266"))continue;if(pm.getLaunchIntentForPackage(ai.packageName)!=null)ls.add(ai);}Collections.sort(ls,new Comparator<ApplicationInfo>(){@Override public int compare(ApplicationInfo a,ApplicationInfo b){return String.valueOf(pm.getApplicationLabel(a)).compareToIgnoreCase(String.valueOf(pm.getApplicationLabel(b)));}});for(ApplicationInfo ai:ls){JSONObject x=new JSONObject();x.put("name",String.valueOf(pm.getApplicationLabel(ai)));x.put("pkg",ai.packageName);out.put(x);}}catch(Exception ignored){}return out.toString();}
