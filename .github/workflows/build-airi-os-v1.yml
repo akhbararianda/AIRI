@@ -1,8 +1,8 @@
-name: Build AIRI OS v15 Wallpaper Motion Pack APK
+name: Build AIRI OS v16 Future Core Edition APK
 
 on:
   push:
-    branches: [airi-os-v15-wallpaper-motion-pack]
+    branches: [airi-os-v16-future-core-edition]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
@@ -35,12 +35,12 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Rename APK
-        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v15.0-Wallpaper-Motion-Pack-RMX1851.apk
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v16.0-Future-Core-Edition-RMX1851.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-OS-v15.0-Wallpaper-Motion-Pack-RMX1851
-          path: AIRI-OS-v15.0-Wallpaper-Motion-Pack-RMX1851.apk
+          name: AIRI-OS-v16.0-Future-Core-Edition-RMX1851
+          path: AIRI-OS-v16.0-Future-Core-Edition-RMX1851.apk
           if-no-files-found: error
           retention-days: 30
