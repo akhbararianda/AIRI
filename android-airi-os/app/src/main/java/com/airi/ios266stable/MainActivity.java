@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -29,6 +30,12 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -37,10 +44,13 @@ import java.util.Locale;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private SharedPreferences prefs;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState); configureWindow();
-        webView = new WebView(this); webView.setBackgroundColor(Color.TRANSPARENT); webView.setOverScrollMode(View.OVER_SCROLL_NEVER); webView.setVerticalScrollBarEnabled(false); webView.setHorizontalScrollBarEnabled(false); webView.setLayerType(View.LAYER_TYPE_HARDWARE,null); setContentView(webView);
+        super.onCreate(savedInstanceState);
+        prefs=getSharedPreferences("airi5",MODE_PRIVATE);
+        configureWindow();
+        webView=new WebView(this); webView.setBackgroundColor(Color.TRANSPARENT); webView.setOverScrollMode(View.OVER_SCROLL_NEVER); webView.setVerticalScrollBarEnabled(false); webView.setHorizontalScrollBarEnabled(false); webView.setLayerType(View.LAYER_TYPE_HARDWARE,null); setContentView(webView);
         WebSettings s=webView.getSettings(); s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setAllowFileAccess(true); s.setAllowContentAccess(true); s.setMediaPlaybackRequiresUserGesture(false); s.setBuiltInZoomControls(false); s.setDisplayZoomControls(false); s.setSupportZoom(false); s.setLoadWithOverviewMode(false); s.setUseWideViewPort(false); s.setCacheMode(WebSettings.LOAD_DEFAULT); s.setTextZoom(100);
         webView.addJavascriptInterface(new AiriBridge(),"AIRI");
         webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r){return handleUri(r.getUrl());}@Override public boolean shouldOverrideUrlLoading(WebView v,String u){return handleUri(Uri.parse(u));}});
@@ -52,7 +62,7 @@ public class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=28){WindowManager.LayoutParams lp=w.getAttributes();lp.layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;w.setAttributes(lp);}
         w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
-    @Override protected void onResume(){super.onResume();configureWindow();if(webView!=null){webView.onResume();webView.postDelayed(()->webView.evaluateJavascript("window.airiRefresh&&window.airiRefresh()",null),120);}}
+    @Override protected void onResume(){super.onResume();configureWindow();if(webView!=null){webView.onResume();webView.postDelayed(()->webView.evaluateJavascript("window.airiRefresh&&window.airiRefresh()",null),100);}}
     @Override protected void onPause(){if(webView!=null)webView.onPause();super.onPause();}
     @Override protected void onSaveInstanceState(Bundle b){if(webView!=null)webView.saveState(b);super.onSaveInstanceState(b);}
     @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);configureWindow();if(webView!=null)webView.evaluateJavascript("window.airiHome&&window.airiHome()",null);}
@@ -61,10 +71,20 @@ public class MainActivity extends Activity {
     private void launchPackage(String pkg){
         if("airi.camera".equals(pkg)){startActivity(new Intent(this,CameraActivity.class));return;}
         if("settings".equals(pkg)){try{startActivity(new Intent(Settings.ACTION_SETTINGS));}catch(Exception e){show("Pengaturan Android tidak tersedia");}return;}
-        try{Intent in=getPackageManager().getLaunchIntentForPackage(pkg);if(in==null){if("com.android.contacts".equals(pkg)){in=getPackageManager().getLaunchIntentForPackage("com.android.dialer");if(in==null)in=getPackageManager().getLaunchIntentForPackage("com.google.android.dialer");if(in==null)in=new Intent(Intent.ACTION_DIAL);}else if("com.android.mms".equals(pkg)){in=getPackageManager().getLaunchIntentForPackage("com.google.android.apps.messaging");if(in==null)in=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING);}else if("com.coloros.filemanager".equals(pkg))in=new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);}if(in==null){show("Aplikasi belum tersedia di perangkat");return;}in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);startActivity(in);}catch(ActivityNotFoundException e){show("Aplikasi tidak ditemukan");}catch(Exception e){show("Tidak dapat membuka aplikasi");}}
+        try{Intent in=getPackageManager().getLaunchIntentForPackage(pkg);if(in==null){if("com.android.contacts".equals(pkg)){in=getPackageManager().getLaunchIntentForPackage("com.android.dialer");if(in==null)in=getPackageManager().getLaunchIntentForPackage("com.google.android.dialer");if(in==null)in=new Intent(Intent.ACTION_DIAL);}else if("com.android.mms".equals(pkg)){in=getPackageManager().getLaunchIntentForPackage("com.google.android.apps.messaging");if(in==null)in=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING);}else if("com.coloros.filemanager".equals(pkg))in=new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);}if(in==null){show("Aplikasi belum tersedia");return;}in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);startActivity(in);}catch(ActivityNotFoundException e){show("Aplikasi tidak ditemukan");}catch(Exception e){show("Tidak dapat membuka aplikasi");}}
     private void openAppInfo(String pkg){try{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+pkg)));}catch(Exception e){show("Info aplikasi tidak tersedia");}}
     private void show(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
     @Override public void onBackPressed(){if(webView==null){moveTaskToBack(true);return;}webView.evaluateJavascript("(window.airiBack?window.airiBack():false)",v->{if(v==null||"false".equals(v)||"null".equals(v))moveTaskToBack(true);});}
+
+    private String deviceStatus(){JSONObject o=new JSONObject();try{BatteryManager bm=(BatteryManager)getSystemService(BATTERY_SERVICE);int bat=bm!=null?bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY):-1;ActivityManager am=(ActivityManager)getSystemService(ACTIVITY_SERVICE);ActivityManager.MemoryInfo mi=new ActivityManager.MemoryInfo();if(am!=null)am.getMemoryInfo(mi);long ram=mi.totalMem;StatFs fs=new StatFs(Environment.getDataDirectory().getAbsolutePath());long total=fs.getBlockCountLong()*fs.getBlockSizeLong(),free=fs.getAvailableBlocksLong()*fs.getBlockSizeLong();double gb=1024d*1024d*1024d;DisplayMetrics dm=new DisplayMetrics();getWindowManager().getDefaultDisplay().getRealMetrics(dm);o.put("battery",bat<0?0:bat);o.put("ramGb",String.format(Locale.US,"%.1f",ram/gb));o.put("totalGb",String.format(Locale.US,"%.0f",total/gb));o.put("freeGb",String.format(Locale.US,"%.1f",free/gb));o.put("widthPx",dm.widthPixels);o.put("heightPx",dm.heightPixels);o.put("density",dm.density);o.put("lite",(am!=null&&am.isLowRamDevice())||(ram>0&&ram<=5L*1024L*1024L*1024L));}catch(Exception ignored){}return o.toString();}
+
+    private void askGateway(String message){
+        final String gateway=prefs.getString("gateway","").trim(); final String provider=prefs.getString("provider","openai");
+        if(gateway.isEmpty()){sendAiResult("Gateway AI belum diatur. Perintah perangkat tetap bisa saya jalankan secara lokal.",false);return;}
+        if(!gateway.startsWith("https://")){sendAiResult("Gateway harus menggunakan HTTPS.",false);return;}
+        new Thread(()->{HttpURLConnection c=null;try{URL u=new URL(gateway);c=(HttpURLConnection)u.openConnection();c.setRequestMethod("POST");c.setConnectTimeout(10000);c.setReadTimeout(30000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");JSONObject body=new JSONObject();body.put("provider",provider);body.put("message",message);body.put("device",new JSONObject(deviceStatus()));body.put("system","Anda adalah AIRI Assistant di Android. Jawab ringkas, praktis, bahasa Indonesia. Jangan mengklaim melakukan tindakan yang tidak dilakukan aplikasi.");byte[] data=body.toString().getBytes(StandardCharsets.UTF_8);try(OutputStream os=c.getOutputStream()){os.write(data);}int code=c.getResponseCode();BufferedReader br=new BufferedReader(new InputStreamReader(code>=200&&code<300?c.getInputStream():c.getErrorStream(),StandardCharsets.UTF_8));StringBuilder sb=new StringBuilder();String line;while((line=br.readLine())!=null)sb.append(line);String raw=sb.toString();String reply=raw;try{JSONObject j=new JSONObject(raw);reply=j.optString("reply",j.optString("output_text",raw));}catch(Exception ignored){}sendAiResult(reply,code>=200&&code<300);}catch(Exception e){sendAiResult("AI Gateway tidak dapat dihubungi: "+e.getClass().getSimpleName(),false);}finally{if(c!=null)c.disconnect();}}).start();
+    }
+    private void sendAiResult(String text,boolean ok){if(webView==null)return;final String js="window.airiAiResult&&window.airiAiResult("+JSONObject.quote(text)+","+(ok?"true":"false")+")";runOnUiThread(()->webView.evaluateJavascript(js,null));}
 
     private class AiriBridge{
         @JavascriptInterface public void launchApp(String p){runOnUiThread(()->launchPackage(p));}
@@ -75,6 +95,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void setBrightness(int value){runOnUiThread(()->{WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=Math.max(.05f,Math.min(1f,value/100f));getWindow().setAttributes(lp);});}
         @JavascriptInterface public void setVolume(int value){runOnUiThread(()->{AudioManager am=(AudioManager)getSystemService(AUDIO_SERVICE);if(am!=null){int max=am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);am.setStreamVolume(AudioManager.STREAM_MUSIC,Math.round(max*Math.max(0,Math.min(100,value))/100f),0);}});}
         @JavascriptInterface public String getInstalledApps(){JSONArray out=new JSONArray();try{PackageManager pm=getPackageManager();List<ApplicationInfo> all=pm.getInstalledApplications(PackageManager.GET_META_DATA),ls=new ArrayList<>();for(ApplicationInfo ai:all){if(ai.packageName.equals(getPackageName())||ai.packageName.startsWith("com.airi.ios266"))continue;if(pm.getLaunchIntentForPackage(ai.packageName)!=null)ls.add(ai);}Collections.sort(ls,new Comparator<ApplicationInfo>(){@Override public int compare(ApplicationInfo a,ApplicationInfo b){return String.valueOf(pm.getApplicationLabel(a)).compareToIgnoreCase(String.valueOf(pm.getApplicationLabel(b)));}});for(ApplicationInfo ai:ls){JSONObject x=new JSONObject();x.put("name",String.valueOf(pm.getApplicationLabel(ai)));x.put("pkg",ai.packageName);out.put(x);}}catch(Exception ignored){}return out.toString();}
-        @JavascriptInterface public String getDeviceStatus(){JSONObject o=new JSONObject();try{BatteryManager bm=(BatteryManager)getSystemService(BATTERY_SERVICE);int bat=bm!=null?bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY):-1;ActivityManager am=(ActivityManager)getSystemService(ACTIVITY_SERVICE);ActivityManager.MemoryInfo mi=new ActivityManager.MemoryInfo();if(am!=null)am.getMemoryInfo(mi);long ram=mi.totalMem;StatFs fs=new StatFs(Environment.getDataDirectory().getAbsolutePath());long total=fs.getBlockCountLong()*fs.getBlockSizeLong(),free=fs.getAvailableBlocksLong()*fs.getBlockSizeLong();double gb=1024d*1024d*1024d;DisplayMetrics dm=new DisplayMetrics();getWindowManager().getDefaultDisplay().getRealMetrics(dm);o.put("battery",bat<0?76:bat);o.put("ramGb",String.format(Locale.US,"%.1f",ram/gb));o.put("totalGb",String.format(Locale.US,"%.0f",total/gb));o.put("freeGb",String.format(Locale.US,"%.1f",free/gb));o.put("widthPx",dm.widthPixels);o.put("heightPx",dm.heightPixels);o.put("density",dm.density);o.put("lite",(am!=null&&am.isLowRamDevice())||(ram>0&&ram<=5L*1024L*1024L*1024L));}catch(Exception ignored){}return o.toString();}
+        @JavascriptInterface public String getDeviceStatus(){return deviceStatus();}
+        @JavascriptInterface public void setIslandPosition(int x,int y){prefs.edit().putInt("islandX",x).putInt("islandY",y).apply();}
+        @JavascriptInterface public String getIslandPosition(){JSONObject o=new JSONObject();try{o.put("x",prefs.getInt("islandX",-1));o.put("y",prefs.getInt("islandY",18));}catch(Exception ignored){}return o.toString();}
+        @JavascriptInterface public void saveAiConfig(String gateway,String provider){prefs.edit().putString("gateway",gateway==null?"":gateway.trim()).putString("provider","gemini".equals(provider)?"gemini":"openai").apply();}
+        @JavascriptInterface public String getAiConfig(){JSONObject o=new JSONObject();try{o.put("gateway",prefs.getString("gateway",""));o.put("provider",prefs.getString("provider","openai"));}catch(Exception ignored){}return o.toString();}
+        @JavascriptInterface public void askAI(String message){askGateway(message==null?"":message.trim());}
     }
 }
