@@ -10,6 +10,10 @@
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".QuickMainActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
