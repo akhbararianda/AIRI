@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -16,7 +15,10 @@ import android.widget.TextView;
 public class AiriSettingsActivity extends Activity {
     @Override protected void onCreate(Bundle b){super.onCreate(b);build();}
     private void build(){ScrollView sc=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(18),dp(28),dp(18),dp(30));root.setBackgroundColor(AiriTheme.surface(this));sc.addView(root,new ScrollView.LayoutParams(-1,-2));
-        root.addView(t("AIRI Settings",31,true));TextView sub=t("HyperFlow Wallpaper & Motion Pack • "+AiriTheme.label(this),13,false);sub.setTextColor(AiriTheme.muted(this));root.addView(sub,lp(-1,-2,0,3,0,18));
+        root.addView(t("AIRI Settings",31,true));TextView sub=t("Future Core Edition • "+AiriTheme.label(this),13,false);sub.setTextColor(AiriTheme.muted(this));root.addView(sub,lp(-1,-2,0,3,0,18));
+        card(root,"✦  Future Core","Universal Search • Privacy Pulse • Focus • Automations",()->open(new Intent(this,FutureCoreActivity.class)));
+        card(root,"⌕  Universal Search","Apps, AIRI tools and Android settings",()->open(new Intent(this,UniversalSearchActivity.class)));
+        card(root,"▦  Quick Automations","Alarm • Internet • Focus • Battery • Privacy",()->open(new Intent(this,QuickAutomationActivity.class)));
         card(root,"▦  Wallpaper Center","24 wallpaper bawaan • Home + Lock",()->open(new Intent(this,WallpaperPackActivity.class)));
         card(root,"↝  Motion Engine","Lite • Balanced • Ultra • transition styles",()->open(new Intent(this,MotionCenterActivity.class)));
         card(root,"◉  Theme Center","Pearl Titanium • Emerald • Sunset • Lavender",()->open(new Intent(this,ThemeCenterActivity.class)));
