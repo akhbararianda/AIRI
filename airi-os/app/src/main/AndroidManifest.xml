@@ -25,6 +25,7 @@
         <activity android:name=".StableSetupActivity" android:exported="false" />
         <activity android:name=".AiriSettingsActivity" android:exported="false" />
         <activity android:name=".FusionFeaturesActivity" android:exported="false" />
+        <activity android:name=".AppLibraryActivity" android:exported="false" />
         <activity android:name=".IntelligenceHubActivity" android:exported="false" />
         <activity android:name=".GalleryLabActivity" android:exported="false" />
         <activity android:name=".PerformanceCenterActivity" android:exported="false" />
