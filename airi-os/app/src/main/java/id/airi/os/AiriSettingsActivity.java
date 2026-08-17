@@ -15,7 +15,8 @@ import android.widget.TextView;
 public class AiriSettingsActivity extends Activity {
     @Override protected void onCreate(Bundle b){super.onCreate(b);build();}
     private void build(){ScrollView sc=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(18),dp(28),dp(18),dp(30));root.setBackgroundColor(AiriTheme.surface(this));sc.addView(root,new ScrollView.LayoutParams(-1,-2));
-        root.addView(t("AIRI Settings",31,true));TextView sub=t("Future Core Edition • "+AiriTheme.label(this),13,false);sub.setTextColor(AiriTheme.muted(this));root.addView(sub,lp(-1,-2,0,3,0,18));
+        root.addView(t("AIRI Settings",31,true));TextView sub=t("Infinity Stable v17 • "+AiriTheme.label(this)+" • "+AiriIconPack.label(this),13,false);sub.setTextColor(AiriTheme.muted(this));root.addView(sub,lp(-1,-2,0,3,0,18));
+        card(root,"◈  AIRI Icon Pack","Crystal Clear • Pearl Light • Graphite Dark • AIRI Tinted",()->open(new Intent(this,IconPackActivity.class)));
         card(root,"✦  Future Core","Universal Search • Privacy Pulse • Focus • Automations",()->open(new Intent(this,FutureCoreActivity.class)));
         card(root,"⌕  Universal Search","Apps, AIRI tools and Android settings",()->open(new Intent(this,UniversalSearchActivity.class)));
         card(root,"▦  Quick Automations","Alarm • Internet • Focus • Battery • Privacy",()->open(new Intent(this,QuickAutomationActivity.class)));
