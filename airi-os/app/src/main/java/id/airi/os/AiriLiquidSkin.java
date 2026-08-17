@@ -13,21 +13,20 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 public final class AiriLiquidSkin {
-    private static final int INK=Color.rgb(20,28,38), MUTED=Color.rgb(96,108,120);
     private AiriLiquidSkin(){}
-
     public static void apply(Activity a){
         try{
-            Window w=a.getWindow();w.setStatusBarColor(Color.TRANSPARENT);w.setNavigationBarColor(Color.rgb(221,237,248));
+            Window w=a.getWindow();w.setStatusBarColor(Color.TRANSPARENT);w.setNavigationBarColor(AiriTheme.nav(a));
             if(Build.VERSION.SDK_INT>=23)w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
             View root=w.getDecorView().findViewById(android.R.id.content);
             if(root instanceof ViewGroup)walk(a,(ViewGroup)root,0);
         }catch(Exception ignored){}
     }
     private static void walk(Activity a,ViewGroup group,int depth){
+        int ink=AiriTheme.ink(a),muted=AiriTheme.muted(a);
         for(int i=0;i<group.getChildCount();i++){
             View v=group.getChildAt(i);
-            if(v instanceof TextView){TextView t=(TextView)v;if(t instanceof EditText){t.setTextColor(INK);t.setHintTextColor(MUTED);}else if(t.getCurrentTextColor()==Color.BLACK||t.getCurrentTextColor()==Color.DKGRAY){t.setTextColor(INK);}if(t.getTextSize()>=sp(a,24))t.setTypeface(Typeface.create("sans",Typeface.BOLD));}
+            if(v instanceof TextView){TextView t=(TextView)v;if(t instanceof EditText){t.setTextColor(ink);t.setHintTextColor(muted);}else if(t.getCurrentTextColor()==Color.BLACK||t.getCurrentTextColor()==Color.DKGRAY){t.setTextColor(ink);}if(t.getTextSize()>=sp(a,24))t.setTypeface(Typeface.create("sans",Typeface.BOLD));}
             if(v instanceof LinearLayout && depth>0 && v.getBackground()==null){LinearLayout l=(LinearLayout)v;if(l.getChildCount()>1){l.setBackground(AiriGlassDrawable.make(a,28,AiriGlassDrawable.REGULAR));l.setElevation(dp(a,8));press(v);}}
             if(v instanceof ViewGroup)walk(a,(ViewGroup)v,depth+1);
         }
