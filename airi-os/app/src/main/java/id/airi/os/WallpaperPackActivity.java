@@ -3,6 +3,7 @@ package id.airi.os;
 import android.app.Activity;
 import android.app.WallpaperManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -20,7 +21,12 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.InputStream;
+
 public class WallpaperPackActivity extends Activity {
+    private static final String[] HD_NAMES={"Infinity Glass HD","Aurora Orbit HD","Titanium Flow HD","Emerald Future HD","Violet Core HD","Sunset Quantum HD"};
+    private static final String[] HD_FILES={"infinity_glass.png","aurora_orbit.png","titanium_flow.png","emerald_future.png","violet_core.png","sunset_quantum.png"};
+    private static final int[][] HD_COLORS={{0xff111b38,0xff5f76ff,0xffb778ff},{0xffedf4ff,0xff9cb9ff,0xffffc3d8},{0xff090f17,0xff22788d,0xff744caf},{0xfff5eee4,0xffd6bc9f,0xffa188ff},{0xff09141f,0xff145a70,0xff5be0c2},{0xff28182d,0xff934a79,0xffff9d68}};
     private static final String[] NAMES={
             "Ice Bloom","Aurora Glass","Peach Mist","Mint Flow","Blue Silk","Lavender Air",
             "Sunrise Pearl","Ocean Haze","Cloud Prism","Coral Frost","Emerald Veil","Sky Porcelain",
@@ -37,16 +43,19 @@ public class WallpaperPackActivity extends Activity {
     @Override protected void onCreate(Bundle b){super.onCreate(b);build();}
     private void build(){
         ScrollView sc=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(16),dp(28),dp(16),dp(28));root.setBackgroundColor(0xffeef4fa);sc.addView(root,new ScrollView.LayoutParams(-1,-2));
-        root.addView(t("Wallpaper Center",31,true));TextView sub=t("24 wallpaper bawaan • Home + Lock",12,false);sub.setTextColor(0xff6b7480);root.addView(sub,lp(-1,-2,0,3,0,16));
+        root.addView(t("Wallpaper Center",31,true));TextView sub=t("30 wallpaper • 6 HD offline assets + 24 procedural",12,false);sub.setTextColor(0xff6b7480);root.addView(sub,lp(-1,-2,0,3,0,16));
+        TextView hd=t("ULTRA ASSET PACK",11,true);hd.setTextColor(0xff5267d8);root.addView(hd,lp(-1,-2,2,0,0,7));
+        GridLayout hdGrid=new GridLayout(this);hdGrid.setColumnCount(2);root.addView(hdGrid,new LinearLayout.LayoutParams(-1,-2));
+        for(int i=0;i<HD_NAMES.length;i++){final int idx=i;LinearLayout card=cardBase();View preview=new View(this);preview.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,HD_COLORS[i]));card.addView(preview,new LinearLayout.LayoutParams(-1,dp(138)));TextView name=t(HD_NAMES[i],13,true);name.setPadding(dp(2),dp(8),0,0);card.addView(name);TextView hint=t("Bundled HD • offline",9,false);hint.setTextColor(0xff5267d8);card.addView(hint);card.setOnClickListener(v->applyHd(idx,false));card.setOnLongClickListener(v->{applyHd(idx,true);return true;});GridLayout.LayoutParams p=new GridLayout.LayoutParams();p.width=0;p.height=dp(194);p.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);p.setMargins(dp(4),dp(4),dp(4),dp(4));hdGrid.addView(card,p);}
+        TextView classic=t("CLASSIC + AIRI PACK",11,true);classic.setTextColor(0xff59616d);root.addView(classic,lp(-1,-2,2,14,0,7));
         GridLayout grid=new GridLayout(this);grid.setColumnCount(2);root.addView(grid,new LinearLayout.LayoutParams(-1,-2));
-        for(int i=0;i<NAMES.length;i++){final int idx=i;LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(8),dp(8),dp(8),dp(10));card.setBackground(round(0xd8ffffff,26));card.setElevation(dp(5));
-            View preview=new View(this);preview.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,COLORS[i]));card.addView(preview,new LinearLayout.LayoutParams(-1,dp(126)));
-            TextView name=t(NAMES[i],13,true);name.setPadding(dp(2),dp(8),0,0);card.addView(name);TextView hint=t(i<12?"Light pack":(i<18?"AMOLED pack":"AIRI pack"),9,false);hint.setTextColor(0xff7b8490);card.addView(hint);
-            card.setOnClickListener(v->apply(idx,false));card.setOnLongClickListener(v->{apply(idx,true);return true;});GridLayout.LayoutParams p=new GridLayout.LayoutParams();p.width=0;p.height=dp(180);p.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);p.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(card,p);
-        }
-        TextView note=t("Tap = Home wallpaper • tahan = Home + Lock wallpaper",10,false);note.setTextColor(0xff69727e);note.setGravity(Gravity.CENTER);root.addView(note,lp(-1,-2,0,12,0,0));setContentView(sc);
+        for(int i=0;i<NAMES.length;i++){final int idx=i;LinearLayout card=cardBase();View preview=new View(this);preview.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,COLORS[i]));card.addView(preview,new LinearLayout.LayoutParams(-1,dp(126)));TextView name=t(NAMES[i],13,true);name.setPadding(dp(2),dp(8),0,0);card.addView(name);TextView hint=t(i<12?"Light pack":(i<18?"AMOLED pack":"AIRI pack"),9,false);hint.setTextColor(0xff7b8490);card.addView(hint);card.setOnClickListener(v->apply(idx,false));card.setOnLongClickListener(v->{apply(idx,true);return true;});GridLayout.LayoutParams p=new GridLayout.LayoutParams();p.width=0;p.height=dp(180);p.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);p.setMargins(dp(4),dp(4),dp(4),dp(4));grid.addView(card,p);}
+        TextView note=t("Tap = Home • tahan = Home + Lock",10,false);note.setTextColor(0xff69727e);note.setGravity(Gravity.CENTER);root.addView(note,lp(-1,-2,0,12,0,0));setContentView(sc);
     }
-    private void apply(int idx,boolean lock){try{Bitmap bmp=render(idx,1080,2400);WallpaperManager wm=WallpaperManager.getInstance(this);if(Build.VERSION.SDK_INT>=24){wm.setBitmap(bmp,null,true,WallpaperManager.FLAG_SYSTEM);if(lock)wm.setBitmap(bmp,null,true,WallpaperManager.FLAG_LOCK);}else wm.setBitmap(bmp);Toast.makeText(this,lock?"Home + Lock wallpaper diterapkan":"Home wallpaper diterapkan",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,"Gagal menerapkan wallpaper",Toast.LENGTH_SHORT).show();}}
+    private LinearLayout cardBase(){LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(8),dp(8),dp(8),dp(10));card.setBackground(round(0xd8ffffff,26));card.setElevation(dp(5));return card;}
+    private void applyHd(int idx,boolean lock){try(InputStream in=getAssets().open("wallpapers/"+HD_FILES[idx])){Bitmap bmp=BitmapFactory.decodeStream(in);setWallpaper(bmp,lock);}catch(Exception e){Toast.makeText(this,"Asset HD belum tersedia",Toast.LENGTH_SHORT).show();}}
+    private void apply(int idx,boolean lock){try{Bitmap bmp=render(idx,1080,2400);setWallpaper(bmp,lock);}catch(Exception e){Toast.makeText(this,"Gagal menerapkan wallpaper",Toast.LENGTH_SHORT).show();}}
+    private void setWallpaper(Bitmap bmp,boolean lock)throws Exception{WallpaperManager wm=WallpaperManager.getInstance(this);if(Build.VERSION.SDK_INT>=24){wm.setBitmap(bmp,null,true,WallpaperManager.FLAG_SYSTEM);if(lock)wm.setBitmap(bmp,null,true,WallpaperManager.FLAG_LOCK);}else wm.setBitmap(bmp);Toast.makeText(this,lock?"Home + Lock diterapkan":"Home diterapkan",Toast.LENGTH_SHORT).show();}
     private Bitmap render(int idx,int w,int h){Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(b);Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);int[] cs=COLORS[idx];p.setShader(new LinearGradient(0,0,w,h,cs,null,Shader.TileMode.CLAMP));c.drawRect(0,0,w,h,p);p.setShader(null);glow(c,p,w*.18f,h*.16f,w*.72f,Color.WHITE,idx<12?145:45);glow(c,p,w*.84f,h*.28f,w*.68f,cs[2],idx<12?120:150);glow(c,p,w*.25f,h*.78f,w*.75f,cs[1],idx<12?110:130);return b;}
     private void glow(Canvas c,Paint p,float x,float y,float r,int color,int alpha){p.setShader(new RadialGradient(x,y,r,new int[]{Color.argb(alpha,Color.red(color),Color.green(color),Color.blue(color)),Color.TRANSPARENT},null,Shader.TileMode.CLAMP));c.drawCircle(x,y,r,p);p.setShader(null);}
     private android.graphics.drawable.GradientDrawable round(int color,float radius){android.graphics.drawable.GradientDrawable g=new android.graphics.drawable.GradientDrawable();g.setColor(color);g.setCornerRadius(dp((int)radius));return g;}
