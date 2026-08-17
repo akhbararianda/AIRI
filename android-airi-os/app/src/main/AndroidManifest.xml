@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -12,7 +13,7 @@
         <package android:name="com.coloros.filemanager" /><package android:name="com.coloros.calculator" /><package android:name="com.coloros.alarmclock" />
         <package android:name="com.google.android.calendar" /><package android:name="com.coloros.note" /><package android:name="com.google.android.gm" /><package android:name="com.google.android.apps.maps" />
     </queries>
-    <application android:allowBackup="true" android:hardwareAccelerated="true" android:label="AIRI OS 26.6 Stable 4" android:icon="@drawable/airi_icon" android:roundIcon="@drawable/airi_icon" android:theme="@style/Theme.AIRI" android:usesCleartextTraffic="false">
+    <application android:allowBackup="true" android:hardwareAccelerated="true" android:label="AIRI OS 26.6 Stable 5" android:icon="@drawable/airi_icon" android:roundIcon="@drawable/airi_icon" android:theme="@style/Theme.AIRI" android:usesCleartextTraffic="false">
         <activity android:name=".CameraActivity" android:exported="false" android:screenOrientation="portrait" android:theme="@style/Theme.AIRI" />
         <activity android:name=".MainActivity" android:exported="true" android:excludeFromRecents="true" android:launchMode="singleTask" android:resizeableActivity="false" android:screenOrientation="portrait">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
