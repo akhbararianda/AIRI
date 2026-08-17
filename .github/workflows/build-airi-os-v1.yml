@@ -1,8 +1,8 @@
-name: Build AIRI OS v11 Signature Edition APK
+name: Build AIRI OS v12 Signature Home Rebuild APK
 
 on:
   push:
-    branches: [airi-os-v11-signature-edition]
+    branches: [airi-os-v12-signature-home-rebuild]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
@@ -35,12 +35,12 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Rename APK
-        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v11.0-Signature-Edition-RMX1851.apk
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v12.0-Signature-Home-Rebuild-RMX1851.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-OS-v11.0-Signature-Edition-RMX1851
-          path: AIRI-OS-v11.0-Signature-Edition-RMX1851.apk
+          name: AIRI-OS-v12.0-Signature-Home-Rebuild-RMX1851
+          path: AIRI-OS-v12.0-Signature-Home-Rebuild-RMX1851.apk
           if-no-files-found: error
           retention-days: 30
