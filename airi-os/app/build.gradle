@@ -10,8 +10,8 @@ android {
         applicationId 'id.airi.os'
         minSdk 23
         targetSdk 35
-        versionCode 12
-        versionName '12.0.0-signature-home-rebuild'
+        versionCode 13
+        versionName '13.0.0-ai-zero-screen'
     }
 
     buildTypes {
