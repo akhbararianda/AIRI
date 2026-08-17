@@ -1,8 +1,8 @@
-name: Build AIRI OS v13 AI Zero Screen APK
+name: Build AIRI OS v14 HyperFlow Edition APK
 
 on:
   push:
-    branches: [airi-os-v13-ai-zero-screen]
+    branches: [airi-os-v14-hyperflow-edition]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
@@ -35,12 +35,12 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
 
       - name: Rename APK
-        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v13.0-AI-Zero-Screen-RMX1851.apk
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v14.0-HyperFlow-Edition-RMX1851.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-OS-v13.0-AI-Zero-Screen-RMX1851
-          path: AIRI-OS-v13.0-AI-Zero-Screen-RMX1851.apk
+          name: AIRI-OS-v14.0-HyperFlow-Edition-RMX1851
+          path: AIRI-OS-v14.0-HyperFlow-Edition-RMX1851.apk
           if-no-files-found: error
           retention-days: 30
