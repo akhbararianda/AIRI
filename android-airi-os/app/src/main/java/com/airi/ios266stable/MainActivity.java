@@ -1,105 +1,92 @@
 package com.airi.ios266stable;
 
-import android.app.Activity;
-import android.app.ActivityManager;
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
+import android.app.*;
+import android.app.role.RoleManager;
+import android.content.*;
+import android.content.pm.*;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
 import android.net.Uri;
-import android.os.BatteryManager;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Environment;
-import android.os.StatFs;
+import android.os.*;
 import android.provider.Settings;
-import android.util.DisplayMetrics;
-import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.Toast;
+import android.speech.RecognizerIntent;
+import android.view.*;
+import android.widget.*;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 public class MainActivity extends Activity {
-    private WebView webView;
+    private static final int REQ_VOICE=71;
+    private final ArrayList<AppItem> apps=new ArrayList<>();
+    private GridView grid;
+    private FrameLayout root;
+    private TextView island;
     private SharedPreferences prefs;
+    private float downX,downY,startX,startY;
 
-    @Override protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        prefs=getSharedPreferences("airi5",MODE_PRIVATE);
-        configureWindow();
-        webView=new WebView(this); webView.setBackgroundColor(Color.TRANSPARENT); webView.setOverScrollMode(View.OVER_SCROLL_NEVER); webView.setVerticalScrollBarEnabled(false); webView.setHorizontalScrollBarEnabled(false); webView.setLayerType(View.LAYER_TYPE_HARDWARE,null); setContentView(webView);
-        WebSettings s=webView.getSettings(); s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setAllowFileAccess(true); s.setAllowContentAccess(true); s.setMediaPlaybackRequiresUserGesture(false); s.setBuiltInZoomControls(false); s.setDisplayZoomControls(false); s.setSupportZoom(false); s.setLoadWithOverviewMode(false); s.setUseWideViewPort(false); s.setCacheMode(WebSettings.LOAD_DEFAULT); s.setTextZoom(100);
-        webView.addJavascriptInterface(new AiriBridge(),"AIRI");
-        webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r){return handleUri(r.getUrl());}@Override public boolean shouldOverrideUrlLoading(WebView v,String u){return handleUri(Uri.parse(u));}});
-        if(savedInstanceState==null)webView.loadUrl("file:///android_asset/index.html");else webView.restoreState(savedInstanceState);
+    @Override protected void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("airi6",MODE_PRIVATE);configureWindow();buildUi();ensureHomeRole();}
+    @Override protected void onResume(){super.onResume();configureWindow();loadApps();}
+
+    private void configureWindow(){Window w=getWindow();w.setStatusBarColor(Color.TRANSPARENT);w.setNavigationBarColor(Color.TRANSPARENT);if(Build.VERSION.SDK_INT>=28){WindowManager.LayoutParams lp=w.getAttributes();lp.layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;w.setAttributes(lp);}w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);}
+
+    private GradientDrawable bg(int color,float r){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(r));return g;}
+    private int dp(float v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    private TextView txt(String s,int sp,boolean bold){TextView t=new TextView(this);t.setText(s);t.setTextColor(Color.WHITE);t.setTextSize(sp);if(bold)t.setTypeface(null,1);return t;}
+
+    private void buildUi(){
+        root=new FrameLayout(this);
+        GradientDrawable wall=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{0xff65d7ff,0xff4f51e8,0xff1a2047,0xffff6d71,0xffff92c7});
+        root.setBackground(wall);
+        LinearLayout main=new LinearLayout(this);main.setOrientation(LinearLayout.VERTICAL);main.setPadding(dp(16),dp(48),dp(16),dp(108));root.addView(main,new FrameLayout.LayoutParams(-1,-1));
+
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);TextView clock=txt(new java.text.SimpleDateFormat("HH:mm",Locale.getDefault()).format(new Date()),16,true);top.addView(clock,new LinearLayout.LayoutParams(0,dp(38),1));TextView status=txt(deviceText(),12,true);status.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);top.addView(status,new LinearLayout.LayoutParams(0,dp(38),1));main.addView(top);
+
+        LinearLayout cards=new LinearLayout(this);cards.setPadding(0,dp(8),0,dp(10));
+        LinearLayout timeCard=new LinearLayout(this);timeCard.setOrientation(LinearLayout.VERTICAL);timeCard.setPadding(dp(18),dp(14),dp(18),dp(12));timeCard.setBackground(bg(0x35ffffff,28));TextView big=txt(new java.text.SimpleDateFormat("HH:mm",Locale.getDefault()).format(new Date()),48,false);timeCard.addView(big);TextView date=txt(new java.text.SimpleDateFormat("EEEE, d MMM",new Locale("id","ID")).format(new Date()),14,true);timeCard.addView(date);TextView sub=txt("Stable 6 Native Core • Realme 3 Pro",10,false);sub.setTextColor(0xccffffff);timeCard.addView(sub);cards.addView(timeCard,new LinearLayout.LayoutParams(0,dp(132),3));
+        TextView dev=txt(deviceText(),12,true);dev.setGravity(Gravity.CENTER);dev.setBackground(bg(0x35ffffff,28));LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(0,dp(132),1);dlp.leftMargin=dp(10);cards.addView(dev,dlp);main.addView(cards);
+
+        LinearLayout quick=new LinearLayout(this);String[] qs={"Control","AIRI AI","App Drawer"};for(String q:qs){Button b=new Button(this);b.setText(q);b.setTextColor(Color.WHITE);b.setTextSize(11);b.setAllCaps(false);b.setBackground(bg(0x33ffffff,18));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(46),1);lp.rightMargin=dp(6);quick.addView(b,lp);if(q.equals("Control"))b.setOnClickListener(v->showControl());else if(q.equals("AIRI AI"))b.setOnClickListener(v->showAssistant());else b.setOnClickListener(v->showDrawer());}main.addView(quick);
+
+        grid=new GridView(this);grid.setNumColumns(4);grid.setVerticalSpacing(dp(10));grid.setHorizontalSpacing(dp(6));grid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);grid.setSelector(android.R.color.transparent);grid.setPadding(0,dp(10),0,0);main.addView(grid,new LinearLayout.LayoutParams(-1,0,1));
+
+        LinearLayout dock=new LinearLayout(this);dock.setGravity(Gravity.CENTER);dock.setPadding(dp(14),dp(8),dp(14),dp(8));dock.setBackground(bg(0x55ffffff,30));FrameLayout.LayoutParams dockp=new FrameLayout.LayoutParams(dp(360),dp(82),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);dockp.bottomMargin=dp(10);root.addView(dock,dockp);String[] pkgs={"com.android.contacts","com.whatsapp","com.android.chrome","airi.camera"};for(String p:pkgs){TextView b=txt(symbol(p),25,true);b.setGravity(Gravity.CENTER);b.setBackground(bg(0xccffffff,18));b.setTextColor(p.equals("com.android.contacts")||p.equals("com.whatsapp")?0xff14b94e:0xff303744);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(60),1);lp.leftMargin=dp(6);lp.rightMargin=dp(6);dock.addView(b,lp);b.setOnClickListener(v->launch(p));}
+
+        island=txt("",12,true);island.setGravity(Gravity.CENTER);island.setBackground(bg(Color.BLACK,24));FrameLayout.LayoutParams ip=new FrameLayout.LayoutParams(dp(132),dp(38));ip.leftMargin=prefs.getInt("island_x",(getResources().getDisplayMetrics().widthPixels-dp(132))/2);ip.topMargin=prefs.getInt("island_y",dp(12));root.addView(island,ip);island.setOnTouchListener((v,e)->dragIsland(e));
+        setContentView(root);loadApps();
     }
 
-    private void configureWindow(){
-        Window w=getWindow(); w.setStatusBarColor(Color.TRANSPARENT); w.setNavigationBarColor(Color.TRANSPARENT); w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-        if(Build.VERSION.SDK_INT>=28){WindowManager.LayoutParams lp=w.getAttributes();lp.layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;w.setAttributes(lp);}
-        w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-    }
-    @Override protected void onResume(){super.onResume();configureWindow();if(webView!=null){webView.onResume();webView.postDelayed(()->webView.evaluateJavascript("window.airiRefresh&&window.airiRefresh()",null),100);}}
-    @Override protected void onPause(){if(webView!=null)webView.onPause();super.onPause();}
-    @Override protected void onSaveInstanceState(Bundle b){if(webView!=null)webView.saveState(b);super.onSaveInstanceState(b);}
-    @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);configureWindow();if(webView!=null)webView.evaluateJavascript("window.airiHome&&window.airiHome()",null);}
+    private boolean dragIsland(android.view.MotionEvent e){FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)island.getLayoutParams();if(e.getAction()==MotionEvent.ACTION_DOWN){downX=e.getRawX();downY=e.getRawY();startX=lp.leftMargin;startY=lp.topMargin;return true;}if(e.getAction()==MotionEvent.ACTION_MOVE){int nx=(int)(startX+e.getRawX()-downX),ny=(int)(startY+e.getRawY()-downY);nx=Math.max(0,Math.min(root.getWidth()-island.getWidth(),nx));ny=Math.max(0,Math.min(root.getHeight()-island.getHeight(),ny));lp.leftMargin=nx;lp.topMargin=ny;island.setLayoutParams(lp);return true;}if(e.getAction()==MotionEvent.ACTION_UP){prefs.edit().putInt("island_x",lp.leftMargin).putInt("island_y",lp.topMargin).apply();return true;}return false;}
 
-    private boolean handleUri(Uri u){if(u==null||!"app".equalsIgnoreCase(u.getScheme()))return false;String p=u.getHost();if(p!=null)launchPackage(p);return true;}
-    private void launchPackage(String pkg){
-        if("airi.camera".equals(pkg)){startActivity(new Intent(this,CameraActivity.class));return;}
-        if("settings".equals(pkg)){try{startActivity(new Intent(Settings.ACTION_SETTINGS));}catch(Exception e){show("Pengaturan Android tidak tersedia");}return;}
-        try{Intent in=getPackageManager().getLaunchIntentForPackage(pkg);if(in==null){if("com.android.contacts".equals(pkg)){in=getPackageManager().getLaunchIntentForPackage("com.android.dialer");if(in==null)in=getPackageManager().getLaunchIntentForPackage("com.google.android.dialer");if(in==null)in=new Intent(Intent.ACTION_DIAL);}else if("com.android.mms".equals(pkg)){in=getPackageManager().getLaunchIntentForPackage("com.google.android.apps.messaging");if(in==null)in=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING);}else if("com.coloros.filemanager".equals(pkg))in=new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);}if(in==null){show("Aplikasi belum tersedia");return;}in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);startActivity(in);}catch(ActivityNotFoundException e){show("Aplikasi tidak ditemukan");}catch(Exception e){show("Tidak dapat membuka aplikasi");}}
-    private void openAppInfo(String pkg){try{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+pkg)));}catch(Exception e){show("Info aplikasi tidak tersedia");}}
-    private void show(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
-    @Override public void onBackPressed(){if(webView==null){moveTaskToBack(true);return;}webView.evaluateJavascript("(window.airiBack?window.airiBack():false)",v->{if(v==null||"false".equals(v)||"null".equals(v))moveTaskToBack(true);});}
+    private String deviceText(){try{android.os.BatteryManager bm=(android.os.BatteryManager)getSystemService(BATTERY_SERVICE);int b=bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);return b+"% • AIRI";}catch(Exception e){return "AIRI";}}
+    private String symbol(String pkg){if(pkg.contains("contacts"))return "☎";if(pkg.contains("whatsapp"))return "◉";if(pkg.contains("chrome"))return "●";if(pkg.equals("airi.camera"))return "◎";return "◆";}
 
-    private String deviceStatus(){JSONObject o=new JSONObject();try{BatteryManager bm=(BatteryManager)getSystemService(BATTERY_SERVICE);int bat=bm!=null?bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY):-1;ActivityManager am=(ActivityManager)getSystemService(ACTIVITY_SERVICE);ActivityManager.MemoryInfo mi=new ActivityManager.MemoryInfo();if(am!=null)am.getMemoryInfo(mi);long ram=mi.totalMem;StatFs fs=new StatFs(Environment.getDataDirectory().getAbsolutePath());long total=fs.getBlockCountLong()*fs.getBlockSizeLong(),free=fs.getAvailableBlocksLong()*fs.getBlockSizeLong();double gb=1024d*1024d*1024d;DisplayMetrics dm=new DisplayMetrics();getWindowManager().getDefaultDisplay().getRealMetrics(dm);o.put("battery",bat<0?0:bat);o.put("ramGb",String.format(Locale.US,"%.1f",ram/gb));o.put("totalGb",String.format(Locale.US,"%.0f",total/gb));o.put("freeGb",String.format(Locale.US,"%.1f",free/gb));o.put("widthPx",dm.widthPixels);o.put("heightPx",dm.heightPixels);o.put("density",dm.density);o.put("lite",(am!=null&&am.isLowRamDevice())||(ram>0&&ram<=5L*1024L*1024L*1024L));}catch(Exception ignored){}return o.toString();}
+    private void loadApps(){apps.clear();Intent i=new Intent(Intent.ACTION_MAIN);i.addCategory(Intent.CATEGORY_LAUNCHER);List<ResolveInfo> ls=getPackageManager().queryIntentActivities(i,0);Collections.sort(ls,(a,b)->String.valueOf(a.loadLabel(getPackageManager())).compareToIgnoreCase(String.valueOf(b.loadLabel(getPackageManager()))));for(ResolveInfo r:ls){String p=r.activityInfo.packageName;if(p.equals(getPackageName()))continue;apps.add(new AppItem(String.valueOf(r.loadLabel(getPackageManager())),p,r));}if(grid!=null)grid.setAdapter(new AppAdapter());}
 
-    private void askGateway(String message){
-        final String gateway=prefs.getString("gateway","").trim(); final String provider=prefs.getString("provider","openai");
-        if(gateway.isEmpty()){sendAiResult("Gateway AI belum diatur. Perintah perangkat tetap bisa saya jalankan secara lokal.",false);return;}
-        if(!gateway.startsWith("https://")){sendAiResult("Gateway harus menggunakan HTTPS.",false);return;}
-        new Thread(()->{HttpURLConnection c=null;try{URL u=new URL(gateway);c=(HttpURLConnection)u.openConnection();c.setRequestMethod("POST");c.setConnectTimeout(10000);c.setReadTimeout(30000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");JSONObject body=new JSONObject();body.put("provider",provider);body.put("message",message);body.put("device",new JSONObject(deviceStatus()));body.put("system","Anda adalah AIRI Assistant di Android. Jawab ringkas, praktis, bahasa Indonesia. Jangan mengklaim melakukan tindakan yang tidak dilakukan aplikasi.");byte[] data=body.toString().getBytes(StandardCharsets.UTF_8);try(OutputStream os=c.getOutputStream()){os.write(data);}int code=c.getResponseCode();BufferedReader br=new BufferedReader(new InputStreamReader(code>=200&&code<300?c.getInputStream():c.getErrorStream(),StandardCharsets.UTF_8));StringBuilder sb=new StringBuilder();String line;while((line=br.readLine())!=null)sb.append(line);String raw=sb.toString();String reply=raw;try{JSONObject j=new JSONObject(raw);reply=j.optString("reply",j.optString("output_text",raw));}catch(Exception ignored){}sendAiResult(reply,code>=200&&code<300);}catch(Exception e){sendAiResult("AI Gateway tidak dapat dihubungi: "+e.getClass().getSimpleName(),false);}finally{if(c!=null)c.disconnect();}}).start();
-    }
-    private void sendAiResult(String text,boolean ok){if(webView==null)return;final String js="window.airiAiResult&&window.airiAiResult("+JSONObject.quote(text)+","+(ok?"true":"false")+")";runOnUiThread(()->webView.evaluateJavascript(js,null));}
+    private class AppAdapter extends BaseAdapter{public int getCount(){return Math.min(16,apps.size());}public Object getItem(int p){return apps.get(p);}public long getItemId(int p){return p;}public View getView(int pos,View cv,android.view.ViewGroup parent){AppItem a=apps.get(pos);LinearLayout l=new LinearLayout(MainActivity.this);l.setOrientation(LinearLayout.VERTICAL);l.setGravity(Gravity.CENTER);ImageView icon=new ImageView(MainActivity.this);icon.setImageDrawable(a.r.loadIcon(getPackageManager()));l.addView(icon,new LinearLayout.LayoutParams(dp(58),dp(58)));TextView n=txt(a.name,10,false);n.setGravity(Gravity.CENTER);n.setSingleLine(true);l.addView(n,new LinearLayout.LayoutParams(-1,dp(24)));l.setPadding(dp(2),dp(3),dp(2),dp(3));l.setOnClickListener(v->launch(a.pkg));l.setOnLongClickListener(v->{startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:"+a.pkg)));return true;});return l;}}
+    private static class AppItem{String name,pkg;ResolveInfo r;AppItem(String n,String p,ResolveInfo x){name=n;pkg=p;r=x;}}
 
-    private class AiriBridge{
-        @JavascriptInterface public void launchApp(String p){runOnUiThread(()->launchPackage(p));}
-        @JavascriptInterface public void openCamera(){runOnUiThread(()->startActivity(new Intent(MainActivity.this,CameraActivity.class)));}
-        @JavascriptInterface public void openAppInfo(String p){runOnUiThread(()->MainActivity.this.openAppInfo(p));}
-        @JavascriptInterface public void openHomeSettings(){runOnUiThread(()->{try{startActivity(new Intent(Settings.ACTION_HOME_SETTINGS));}catch(Exception e){show("Menu launcher default tidak tersedia");}});}
-        @JavascriptInterface public void openPanel(String panel){runOnUiThread(()->{try{Intent i;if("wifi".equals(panel)){if(Build.VERSION.SDK_INT>=29)i=new Intent(Settings.Panel.ACTION_WIFI);else i=new Intent(Settings.ACTION_WIFI_SETTINGS);}else if("bluetooth".equals(panel))i=new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);else if("display".equals(panel))i=new Intent(Settings.ACTION_DISPLAY_SETTINGS);else if("focus".equals(panel))i=new Intent("android.settings.ZEN_MODE_SETTINGS");else i=new Intent(Settings.ACTION_SETTINGS);startActivity(i);}catch(Exception e){show("Panel sistem tidak tersedia");}});}
-        @JavascriptInterface public void setBrightness(int value){runOnUiThread(()->{WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=Math.max(.05f,Math.min(1f,value/100f));getWindow().setAttributes(lp);});}
-        @JavascriptInterface public void setVolume(int value){runOnUiThread(()->{AudioManager am=(AudioManager)getSystemService(AUDIO_SERVICE);if(am!=null){int max=am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);am.setStreamVolume(AudioManager.STREAM_MUSIC,Math.round(max*Math.max(0,Math.min(100,value))/100f),0);}});}
-        @JavascriptInterface public String getInstalledApps(){JSONArray out=new JSONArray();try{PackageManager pm=getPackageManager();List<ApplicationInfo> all=pm.getInstalledApplications(PackageManager.GET_META_DATA),ls=new ArrayList<>();for(ApplicationInfo ai:all){if(ai.packageName.equals(getPackageName())||ai.packageName.startsWith("com.airi.ios266"))continue;if(pm.getLaunchIntentForPackage(ai.packageName)!=null)ls.add(ai);}Collections.sort(ls,new Comparator<ApplicationInfo>(){@Override public int compare(ApplicationInfo a,ApplicationInfo b){return String.valueOf(pm.getApplicationLabel(a)).compareToIgnoreCase(String.valueOf(pm.getApplicationLabel(b)));}});for(ApplicationInfo ai:ls){JSONObject x=new JSONObject();x.put("name",String.valueOf(pm.getApplicationLabel(ai)));x.put("pkg",ai.packageName);out.put(x);}}catch(Exception ignored){}return out.toString();}
-        @JavascriptInterface public String getDeviceStatus(){return deviceStatus();}
-        @JavascriptInterface public void setIslandPosition(int x,int y){prefs.edit().putInt("islandX",x).putInt("islandY",y).apply();}
-        @JavascriptInterface public String getIslandPosition(){JSONObject o=new JSONObject();try{o.put("x",prefs.getInt("islandX",-1));o.put("y",prefs.getInt("islandY",18));}catch(Exception ignored){}return o.toString();}
-        @JavascriptInterface public void saveAiConfig(String gateway,String provider){prefs.edit().putString("gateway",gateway==null?"":gateway.trim()).putString("provider","gemini".equals(provider)?"gemini":"openai").apply();}
-        @JavascriptInterface public String getAiConfig(){JSONObject o=new JSONObject();try{o.put("gateway",prefs.getString("gateway",""));o.put("provider",prefs.getString("provider","openai"));}catch(Exception ignored){}return o.toString();}
-        @JavascriptInterface public void askAI(String message){askGateway(message==null?"":message.trim());}
-    }
+    private void launch(String pkg){try{if(pkg.equals("airi.camera")){startActivity(new Intent(this,CameraActivity.class));return;}Intent i=getPackageManager().getLaunchIntentForPackage(pkg);if(i==null&&pkg.equals("com.android.contacts"))i=new Intent(Intent.ACTION_DIAL);if(i==null){Toast.makeText(this,"Aplikasi tidak tersedia",Toast.LENGTH_SHORT).show();return;}startActivity(i);}catch(Exception e){Toast.makeText(this,"Tidak dapat membuka aplikasi",Toast.LENGTH_SHORT).show();}}
+
+    private void showDrawer(){final Dialog d=new Dialog(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(14),dp(20),dp(14),dp(14));box.setBackground(bg(0xff171b29,28));EditText search=new EditText(this);search.setHint("Cari aplikasi");search.setTextColor(Color.WHITE);search.setHintTextColor(0x88ffffff);box.addView(search,new LinearLayout.LayoutParams(-1,dp(48)));GridView g=new GridView(this);g.setNumColumns(4);g.setAdapter(new BaseAdapter(){ArrayList<AppItem> data=apps;public int getCount(){return data.size();}public Object getItem(int p){return data.get(p);}public long getItemId(int p){return p;}public View getView(int p,View v,android.view.ViewGroup x){AppItem a=data.get(p);LinearLayout l=new LinearLayout(MainActivity.this);l.setOrientation(LinearLayout.VERTICAL);l.setGravity(Gravity.CENTER);ImageView im=new ImageView(MainActivity.this);im.setImageDrawable(a.r.loadIcon(getPackageManager()));l.addView(im,new LinearLayout.LayoutParams(dp(52),dp(52)));TextView t=txt(a.name,9,false);t.setGravity(Gravity.CENTER);t.setSingleLine(true);l.addView(t);l.setOnClickListener(z->{d.dismiss();launch(a.pkg);});return l;}});box.addView(g,new LinearLayout.LayoutParams(-1,0,1));d.setContentView(box);d.show();Window w=d.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setLayout(-1,(int)(getResources().getDisplayMetrics().heightPixels*.78));w.setGravity(Gravity.BOTTOM);}}
+
+    private void showControl(){final Dialog d=new Dialog(this);LinearLayout b=new LinearLayout(this);b.setOrientation(LinearLayout.VERTICAL);b.setPadding(dp(18),dp(18),dp(18),dp(18));b.setBackground(bg(0xff171b29,28));TextView title=txt("AIRI Control Center",22,true);b.addView(title);String[] names={"Wi‑Fi","Bluetooth","Display","Focus/DND","Notification Access","Live Island Overlay","Default Home","AIRI Camera"};for(String n:names){Button x=new Button(this);x.setText(n);x.setAllCaps(false);b.addView(x,new LinearLayout.LayoutParams(-1,dp(48)));x.setOnClickListener(v->{d.dismiss();control(n);});}SeekBar br=new SeekBar(this);br.setMax(100);br.setProgress(85);br.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int p,boolean f){WindowManager.LayoutParams lp=getWindow().getAttributes();lp.screenBrightness=Math.max(.05f,p/100f);getWindow().setAttributes(lp);}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});b.addView(txt("Brightness",11,true));b.addView(br);SeekBar vol=new SeekBar(this);vol.setMax(100);vol.setProgress(60);vol.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onProgressChanged(SeekBar s,int p,boolean f){AudioManager a=(AudioManager)getSystemService(AUDIO_SERVICE);int m=a.getStreamMaxVolume(AudioManager.STREAM_MUSIC);a.setStreamVolume(AudioManager.STREAM_MUSIC,Math.round(m*p/100f),0);}public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}});b.addView(txt("Volume",11,true));b.addView(vol);d.setContentView(b);d.show();Window w=d.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setLayout((int)(getResources().getDisplayMetrics().widthPixels*.92),-2);}}
+
+    private void control(String n){try{if(n.equals("Wi‑Fi")){startActivity(Build.VERSION.SDK_INT>=29?new Intent(Settings.Panel.ACTION_WIFI):new Intent(Settings.ACTION_WIFI_SETTINGS));}else if(n.equals("Bluetooth"))startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));else if(n.equals("Display"))startActivity(new Intent(Settings.ACTION_DISPLAY_SETTINGS));else if(n.startsWith("Focus"))startActivity(new Intent("android.settings.ZEN_MODE_SETTINGS"));else if(n.startsWith("Notification"))startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));else if(n.startsWith("Live Island")){if(Build.VERSION.SDK_INT>=23&&!Settings.canDrawOverlays(this)){startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())));}else startIsland();}else if(n.startsWith("Default"))ensureHomeRole();else if(n.contains("Camera"))launch("airi.camera");}catch(Exception e){Toast.makeText(this,"Fitur tidak tersedia pada ColorOS ini",Toast.LENGTH_SHORT).show();}}
+
+    private void ensureHomeRole(){try{if(Build.VERSION.SDK_INT>=29){RoleManager rm=(RoleManager)getSystemService(ROLE_SERVICE);if(rm!=null&&!rm.isRoleHeld(RoleManager.ROLE_HOME))startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_HOME),91);}else{Intent i=new Intent(Settings.ACTION_HOME_SETTINGS);startActivity(i);}}catch(Exception ignored){}}
+    private void startIsland(){prefs.edit().putBoolean("overlay",true).apply();Intent i=new Intent(this,IslandOverlayService.class);if(Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);}
+
+    private void showAssistant(){final Dialog d=new Dialog(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(18),dp(16),dp(16));box.setBackground(bg(0xff111621,28));box.addView(txt("AIRI Assistant",23,true));TextView hint=txt("Perintah lokal + AI Gateway OpenAI/Gemini",11,false);hint.setTextColor(0xaaffffff);box.addView(hint);final EditText input=new EditText(this);input.setHint("Contoh: buka WhatsApp / ringkas ide saya...");input.setTextColor(Color.WHITE);input.setHintTextColor(0x88ffffff);box.addView(input,new LinearLayout.LayoutParams(-1,dp(58)));final TextView out=txt("Siap.",12,false);out.setPadding(0,dp(8),0,dp(8));box.addView(out,new LinearLayout.LayoutParams(-1,dp(120)));LinearLayout row=new LinearLayout(this);Button ask=new Button(this);ask.setText("Kirim");Button voice=new Button(this);voice.setText("Voice");row.addView(ask,new LinearLayout.LayoutParams(0,dp(48),1));row.addView(voice,new LinearLayout.LayoutParams(0,dp(48),1));box.addView(row);EditText gateway=new EditText(this);gateway.setHint("https://gateway-anda.example/ai");gateway.setText(prefs.getString("gateway",""));gateway.setTextColor(Color.WHITE);gateway.setHintTextColor(0x77ffffff);box.addView(gateway);Spinner provider=new Spinner(this);provider.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"OpenAI / ChatGPT","Google Gemini"}));box.addView(provider);ask.setOnClickListener(v->{String q=input.getText().toString().trim();if(q.isEmpty())return;String local=localCommand(q);if(local!=null){out.setText(local);return;}String g=gateway.getText().toString().trim();prefs.edit().putString("gateway",g).apply();if(g.isEmpty()){out.setText("Tambahkan AI Gateway HTTPS untuk pertanyaan cloud. Perintah perangkat tetap bisa tanpa gateway.");return;}out.setText("Memproses…");callGateway(g,provider.getSelectedItemPosition()==0?"openai":"gemini",q,out);});voice.setOnClickListener(v->{try{Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"id-ID");i.putExtra(RecognizerIntent.EXTRA_PROMPT,"Bicara ke AIRI");startActivityForResult(i,REQ_VOICE);}catch(Exception e){Toast.makeText(this,"Voice recognition tidak tersedia",Toast.LENGTH_SHORT).show();}});d.setContentView(box);d.show();Window w=d.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setLayout((int)(getResources().getDisplayMetrics().widthPixels*.94),-2);}}
+
+    private String localCommand(String q){String s=q.toLowerCase(Locale.ROOT);if(s.contains("buka whatsapp")){launch("com.whatsapp");return "Membuka WhatsApp.";}if(s.contains("buka kamera")){launch("airi.camera");return "Membuka AIRI Camera.";}if(s.contains("buka youtube")){launch("com.google.android.youtube");return "Membuka YouTube.";}if(s.contains("wifi")){control("Wi‑Fi");return "Membuka panel Wi‑Fi.";}if(s.contains("bluetooth")){control("Bluetooth");return "Membuka Bluetooth.";}if(s.contains("baterai"))return "Status perangkat: "+deviceText()+".";if(s.contains("launcher")||s.contains("home default")){ensureHomeRole();return "Membuka pengaturan Home default.";}return null;}
+
+    private void callGateway(String endpoint,String provider,String q,TextView out){new Thread(()->{try{URL u=new URL(endpoint);HttpURLConnection c=(HttpURLConnection)u.openConnection();c.setConnectTimeout(12000);c.setReadTimeout(20000);c.setRequestMethod("POST");c.setRequestProperty("Content-Type","application/json");c.setDoOutput(true);JSONObject body=new JSONObject();body.put("provider",provider);body.put("message",q);body.put("device","Realme 3 Pro / AIRI OS Stable 6");try(OutputStream os=c.getOutputStream()){os.write(body.toString().getBytes("UTF-8"));}InputStream is=c.getResponseCode()>=200&&c.getResponseCode()<300?c.getInputStream():c.getErrorStream();BufferedReader br=new BufferedReader(new InputStreamReader(is));StringBuilder sb=new StringBuilder();String line;while((line=br.readLine())!=null)sb.append(line);String res=sb.toString();try{JSONObject j=new JSONObject(res);res=j.optString("reply",j.optString("text",res));}catch(Exception ignored){}final String rr=res;runOnUiThread(()->out.setText(rr));}catch(Exception e){runOnUiThread(()->out.setText("AI Gateway tidak dapat dihubungi. Periksa URL HTTPS/backend."));}}).start();}
+
+    @Override protected void onActivityResult(int r,int c,Intent data){super.onActivityResult(r,c,data);if(r==REQ_VOICE&&c==RESULT_OK&&data!=null){ArrayList<String> x=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);if(x!=null&&!x.isEmpty()){String ans=localCommand(x.get(0));Toast.makeText(this,ans==null?x.get(0):ans,Toast.LENGTH_LONG).show();}}}
 }
