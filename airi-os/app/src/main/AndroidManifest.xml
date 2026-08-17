@@ -1,22 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
     <queries>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
     </queries>
-
     <application android:allowBackup="true" android:label="AIRI OS" android:theme="@style/AppTheme" android:usesCleartextTraffic="false">
         <service android:name=".IrzuqniListenService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity android:name=".AssistantActivity" android:exported="false" />
         <activity android:name=".SmartEraserActivity" android:exported="false" />
         <activity android:name=".CircleSearchActivity" android:exported="false" />
         <activity android:name=".WallpaperLabActivity" android:exported="false" />
+        <activity android:name=".IntelligenceHubActivity" android:exported="false" />
+        <activity android:name=".GalleryLabActivity" android:exported="false" />
+        <activity android:name=".PerformanceCenterActivity" android:exported="false" />
+        <activity android:name=".SmartTextActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:screenOrientation="portrait">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
