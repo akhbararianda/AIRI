@@ -16,9 +16,11 @@ import android.widget.TextView;
 public class AiriSettingsActivity extends Activity {
     @Override protected void onCreate(Bundle b){super.onCreate(b);build();}
     private void build(){ScrollView sc=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(18),dp(28),dp(18),dp(30));root.setBackgroundColor(AiriTheme.surface(this));sc.addView(root,new ScrollView.LayoutParams(-1,-2));
-        root.addView(t("AIRI Settings",31,true));TextView sub=t("Signature Edition • "+AiriTheme.label(this),13,false);sub.setTextColor(AiriTheme.muted(this));root.addView(sub,lp(-1,-2,0,3,0,18));
+        root.addView(t("AIRI Settings",31,true));TextView sub=t("HyperFlow Wallpaper & Motion Pack • "+AiriTheme.label(this),13,false);sub.setTextColor(AiriTheme.muted(this));root.addView(sub,lp(-1,-2,0,3,0,18));
+        card(root,"▦  Wallpaper Center","24 wallpaper bawaan • Home + Lock",()->open(new Intent(this,WallpaperPackActivity.class)));
+        card(root,"↝  Motion Engine","Lite • Balanced • Ultra • transition styles",()->open(new Intent(this,MotionCenterActivity.class)));
         card(root,"◉  Theme Center","Pearl Titanium • Emerald • Sunset • Lavender",()->open(new Intent(this,ThemeCenterActivity.class)));
-        card(root,"◐  Wallpaper","AIRI wallpaper and Home + Lock styling",()->open(new Intent(this,AiriWallpaperActivity.class)));
+        card(root,"◐  Wallpaper Lab","AIRI procedural wallpaper tools",()->open(new Intent(this,AiriWallpaperActivity.class)));
         card(root,"⌂  Home & Launcher","Set AIRI as default Home",this::requestHome);
         card(root,"✦  Irzuqni Intelligence","Voice assistant, Smart Text and Vision tools",()->open(new Intent(this,IntelligenceHubActivity.class)));
         card(root,"◫  Control Center","Connectivity, brightness, volume and flashlight",()->open(new Intent(this,ControlCenterActivity.class)));
