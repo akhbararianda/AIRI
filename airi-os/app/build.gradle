@@ -10,8 +10,8 @@ android {
         applicationId 'id.airi.os'
         minSdk 23
         targetSdk 35
-        versionCode 15
-        versionName '15.0.0-wallpaper-motion-pack'
+        versionCode 16
+        versionName '16.0.0-future-core-edition'
     }
 
     buildTypes {
