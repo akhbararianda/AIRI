@@ -10,8 +10,8 @@ android {
         applicationId 'id.airi.os'
         minSdk 23
         targetSdk 35
-        versionCode 14
-        versionName '14.0.0-hyperflow-edition'
+        versionCode 15
+        versionName '15.0.0-wallpaper-motion-pack'
     }
 
     buildTypes {
