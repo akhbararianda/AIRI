@@ -12,7 +12,6 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.Gravity;
 import android.view.MotionEvent;
-import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -37,7 +36,7 @@ public class SmartEraserActivity extends Activity {
     }
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d); if(r==PICK&&c==RESULT_OK&&d!=null){try{Uri u=d.getData();InputStream in=getContentResolver().openInputStream(u);Bitmap src=BitmapFactory.decodeStream(in);if(src!=null){int max=1600;float scale=Math.min(1f,max/(float)Math.max(src.getWidth(),src.getHeight()));bitmap=Bitmap.createScaledBitmap(src,Math.max(1,(int)(src.getWidth()*scale)),Math.max(1,(int)(src.getHeight()*scale)),true).copy(Bitmap.Config.ARGB_8888,true);image.setImageBitmap(bitmap);}}catch(Exception ignored){}}}
     private void eraseAt(float vx,float vy){
-        if(image.getDrawable()==null)return; float iw=image.getWidth(), ih=image.getHeight(); float bw=bitmap.getWidth(), bh=bitmap.getHeight(); float s=Math.min(iw/bw,ih/bh); float ox=(iw-bw*s)/2f, oy=(ih-bh*s)/2f; int x=(int)((vx-ox)/s), y=(int)((vy-oy)/s); if(x<0||y<0||x>=bw||y>=bh)return;
+        if(image.getDrawable()==null)return; float iw=image.getWidth(), ih=image.getHeight(); int bw=bitmap.getWidth(), bh=bitmap.getHeight(); float s=Math.min(iw/bw,ih/bh); float ox=(iw-bw*s)/2f, oy=(ih-bh*s)/2f; int x=(int)((vx-ox)/s), y=(int)((vy-oy)/s); if(x<0||y<0||x>=bw||y>=bh)return;
         int radius=Math.max(18,Math.min(bw,bh)/28); int sx=Math.max(0,x-radius*2), ex=Math.min(bw-1,x+radius*2), sy=Math.max(0,y-radius*2), ey=Math.min(bh-1,y+radius*2); long rr=0,gg=0,bb=0,n=0;
         for(int xx=sx;xx<=ex;xx+=4)for(int yy=sy;yy<=ey;yy+=4){double dist=Math.hypot(xx-x,yy-y);if(dist>radius*1.25&&dist<radius*2){int p=bitmap.getPixel(xx,yy);rr+=Color.red(p);gg+=Color.green(p);bb+=Color.blue(p);n++;}}
         if(n==0)return; Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);p.setColor(Color.rgb((int)(rr/n),(int)(gg/n),(int)(bb/n)));p.setStyle(Paint.Style.FILL);Canvas c=new Canvas(bitmap);c.drawCircle(x,y,radius,p);image.invalidate();
