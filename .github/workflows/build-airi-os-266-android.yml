@@ -30,13 +30,13 @@ jobs:
           APK=android-airi-os/app/build/outputs/apk/debug/app-debug.apk
           test -f "$APK"
           ls -lh "$APK"
-          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | head -n 35
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | head -n 40
           $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose "$APK"
-          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | grep "package: name='com.airi.ios266stable6'"
-          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | grep "application-label:'AIRI OS 26.6 Stable 6'"
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | grep "package: name='com.airi.ios266stable7'"
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging "$APK" | grep "application-label:'AIRI OS 26.6 Stable 7 Owner'"
       - uses: actions/upload-artifact@v4
         with:
-          name: AIRI-iOS-26.6-Stable-6-Native-Core-Realme3Pro
+          name: AIRI-iOS-26.6-Stable-7-Owner-RMX1851
           path: android-airi-os/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
