@@ -24,6 +24,7 @@
         <activity android:name=".AiriWallpaperActivity" android:exported="false" />
         <activity android:name=".StableSetupActivity" android:exported="false" />
         <activity android:name=".AiriSettingsActivity" android:exported="false" />
+        <activity android:name=".ThemeCenterActivity" android:exported="false" />
         <activity android:name=".FusionFeaturesActivity" android:exported="false" />
         <activity android:name=".AppLibraryActivity" android:exported="false" />
         <activity android:name=".IntelligenceHubActivity" android:exported="false" />
