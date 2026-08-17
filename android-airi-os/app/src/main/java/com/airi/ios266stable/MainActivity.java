@@ -447,7 +447,7 @@ public class MainActivity extends Activity {
 
     private void openStorageManager() {
         try { startActivity(new Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)); }
-        catch (Exception e) { try { startActivity(new Intent(Settings.ACTION_MANAGE_STORAGE)); } catch(Exception ignored){} }
+        catch (Exception e) { try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch(Exception ignored){} }
     }
 
     private void ensureHomeRole() {
