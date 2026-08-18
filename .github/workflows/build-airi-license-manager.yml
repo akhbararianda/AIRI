@@ -1,0 +1,112 @@
+name: Build AIRI License Manager Admin
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'commercial-tools/**'
+      - '.github/workflows/build-airi-license-manager.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-admin:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install admin build dependencies
+        shell: powershell
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r commercial-tools\requirements-admin.txt
+
+      - name: Validate source imports
+        shell: powershell
+        run: |
+          python -m py_compile commercial-tools\airi_license_manager.py
+          python -m py_compile commercial-tools\generate_license.py
+
+      - name: Generate AIRI admin icon
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Add-Type -AssemblyName System.Drawing
+          $out='commercial-tools\airi-license-manager.ico'
+          $bmp=New-Object System.Drawing.Bitmap 256,256
+          $g=[System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $cream=[System.Drawing.Color]::FromArgb(255,248,234)
+          $blue=[System.Drawing.Color]::FromArgb(15,76,129)
+          $white=[System.Drawing.Color]::White
+          $g.Clear($cream)
+          $bBlue=New-Object System.Drawing.SolidBrush($blue)
+          $bWhite=New-Object System.Drawing.SolidBrush($white)
+          $g.FillEllipse($bBlue,18,18,220,220)
+          $font=New-Object System.Drawing.Font('Segoe UI',76,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $small=New-Object System.Drawing.Font('Segoe UI',32,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $sf=New-Object System.Drawing.StringFormat
+          $sf.Alignment=[System.Drawing.StringAlignment]::Center
+          $sf.LineAlignment=[System.Drawing.StringAlignment]::Center
+          $g.DrawString('A',$font,$bWhite,(New-Object System.Drawing.RectangleF(38,38,120,150)),$sf)
+          $g.DrawString('KEY',$small,$bWhite,(New-Object System.Drawing.RectangleF(104,100,122,90)),$sf)
+          $ico=[System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $fs=[System.IO.File]::Create($out);$ico.Save($fs);$fs.Close()
+          $ico.Dispose();$font.Dispose();$small.Dispose();$bBlue.Dispose();$bWhite.Dispose();$g.Dispose();$bmp.Dispose()
+
+      - name: Build AIRI License Manager EXE
+        shell: powershell
+        run: |
+          python -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --windowed `
+            --name "AIRI-License-Manager-Admin-v1.0" `
+            --icon "commercial-tools\airi-license-manager.ico" `
+            commercial-tools\airi_license_manager.py
+
+      - name: Verify admin binary
+        shell: powershell
+        run: |
+          $exe='dist\AIRI-License-Manager-Admin-v1.0.exe'
+          if(-not(Test-Path $exe)){throw 'AIRI License Manager EXE missing'}
+          $size=(Get-Item $exe).Length
+          if($size -lt 5000000){throw "Admin EXE unexpectedly small: $size bytes"}
+          Get-Item $exe | Format-List Name,Length
+
+      - name: Create admin SHA256
+        shell: powershell
+        run: |
+          $h=Get-FileHash 'dist\AIRI-License-Manager-Admin-v1.0.exe' -Algorithm SHA256
+          "$($h.Hash.ToLower())  AIRI-License-Manager-Admin-v1.0.exe" | Set-Content dist\SHA256SUMS-AIRI-License-Manager.txt
+
+      - name: Upload AIRI License Manager artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIRI-License-Manager-Admin-v1.0-Windows
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            dist/AIRI-License-Manager-Admin-v1.0.exe
+            dist/SHA256SUMS-AIRI-License-Manager.txt
+
+      - name: Publish AIRI License Manager release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: airi-license-manager-v1.0.0
+          name: AIRI License Manager — Admin Edition v1.0
+          prerelease: true
+          body: |
+            Private administration utility for AIRI Technology to issue signed AIRI Download Manager licenses from a buyer Machine ID. The private RSA signing key is intentionally NOT bundled or published. Developed by AIRI Technology. Founder: Akhbar Arianda.
+          files: |
+            dist/AIRI-License-Manager-Admin-v1.0.exe
+            dist/SHA256SUMS-AIRI-License-Manager.txt
