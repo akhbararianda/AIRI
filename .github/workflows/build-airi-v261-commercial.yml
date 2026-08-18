@@ -1,0 +1,156 @@
+name: Build AIRI Download Manager v2.6.1 Commercial Final
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'native-v2.1/**'
+      - '.github/workflows/build-airi-v261-commercial.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate AIRI branding assets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Add-Type -AssemblyName System.Drawing
+          $appDir=Join-Path $PWD 'native-v2.1\src\app'
+          $extDir=Join-Path $PWD 'native-v2.1\browser-extension\icons'
+          New-Item -ItemType Directory -Force $extDir | Out-Null
+          $bmp=New-Object System.Drawing.Bitmap 256,256
+          $g=[System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $cream=[System.Drawing.Color]::FromArgb(255,248,234)
+          $blue=[System.Drawing.Color]::FromArgb(15,76,129)
+          $white=[System.Drawing.Color]::White
+          $g.Clear($cream)
+          $brushBlue=New-Object System.Drawing.SolidBrush($blue)
+          $brushWhite=New-Object System.Drawing.SolidBrush($white)
+          $g.FillEllipse($brushBlue,18,18,220,220)
+          $fontA=New-Object System.Drawing.Font('Segoe UI',92,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $fontD=New-Object System.Drawing.Font('Segoe UI',64,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $sf=New-Object System.Drawing.StringFormat
+          $sf.Alignment=[System.Drawing.StringAlignment]::Center
+          $sf.LineAlignment=[System.Drawing.StringAlignment]::Center
+          $g.DrawString('A',$fontA,$brushWhite,(New-Object System.Drawing.RectangleF(22,22,150,180)),$sf)
+          $g.DrawString([char]0x2193,$fontD,$brushWhite,(New-Object System.Drawing.RectangleF(120,76,110,130)),$sf)
+          $hIcon=$bmp.GetHicon();$icon=[System.Drawing.Icon]::FromHandle($hIcon)
+          $fs=[System.IO.File]::Create((Join-Path $appDir 'airi.ico'));$icon.Save($fs);$fs.Close()
+          foreach($size in 16,32,48,128){
+            $small=New-Object System.Drawing.Bitmap $size,$size
+            $sg=[System.Drawing.Graphics]::FromImage($small)
+            $sg.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $sg.DrawImage($bmp,0,0,$size,$size)
+            $small.Save((Join-Path $extDir ("icon$size.png")),[System.Drawing.Imaging.ImageFormat]::Png)
+            $sg.Dispose();$small.Dispose()
+          }
+          $icon.Dispose();$fontA.Dispose();$fontD.Dispose();$brushBlue.Dispose();$brushWhite.Dispose();$g.Dispose();$bmp.Dispose()
+
+      - name: Verify production commercial licensing
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $cm=Get-Content 'native-v2.1\CMakeLists.txt' -Raw
+          if(-not $cm.Contains('VERSION 2.6.1')){throw 'CMake version is not 2.6.1'}
+          if(-not $cm.Contains('licensing_v2.cpp')){throw 'Production licensing implementation is not compiled'}
+          if(-not(Test-Path 'native-v2.1\src\app\licensing_v2.cpp')){throw 'Production licensing implementation missing'}
+          if(-not(Test-Path 'native-v2.1\tests\license_tests.cpp')){throw 'License tests missing'}
+          $license=Get-Content 'native-v2.1\src\app\licensing_v2.cpp' -Raw
+          if(-not $license.Contains('0xd0,0xf5,0xe8,0xc0')){throw 'Expected AIRI production public key not embedded'}
+          if(-not(Test-Path 'native-v2.1\src\app\main_v26_airi.cpp')){throw 'AIRI themed shell missing'}
+          $iss=Get-Content 'native-v2.1\installer\AIRI-DM-Native.iss' -Raw
+          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.6.1')){throw 'Installer output is not v2.6.1'}
+          if(-not $iss.Contains('AIRI Technology')){throw 'Publisher metadata missing'}
+
+      - name: Configure x64
+        shell: powershell
+        run: cmake -S native-v2.1 -B native-v2.1\build-win -A x64
+
+      - name: Build Release
+        shell: powershell
+        run: cmake --build native-v2.1\build-win --config Release --parallel
+
+      - name: Run tests
+        shell: powershell
+        run: ctest --test-dir native-v2.1\build-win -C Release --output-on-failure
+
+      - name: Bundle media engine
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $tools=Join-Path $PWD 'native-v2.1\third_party\tools';New-Item -ItemType Directory -Force $tools|Out-Null
+          $yt=Join-Path $tools 'yt-dlp.exe'
+          Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp.exe' -OutFile $yt
+          $ytHash=(Get-FileHash $yt -Algorithm SHA256).Hash.ToLower()
+          if($ytHash -ne '52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8'){throw "yt-dlp checksum mismatch: $ytHash"}
+          $denoZip=Join-Path $env:RUNNER_TEMP 'deno.zip';Invoke-WebRequest -Uri 'https://github.com/denoland/deno/releases/download/v2.9.5/deno-x86_64-pc-windows-msvc.zip' -OutFile $denoZip
+          $denoDir=Join-Path $env:RUNNER_TEMP 'deno';Expand-Archive $denoZip $denoDir -Force;Copy-Item (Join-Path $denoDir 'deno.exe') (Join-Path $tools 'deno.exe') -Force
+          $ffZip=Join-Path $env:RUNNER_TEMP 'ffmpeg.zip';Invoke-WebRequest -Uri 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $ffZip
+          $ffDir=Join-Path $env:RUNNER_TEMP 'ffmpeg';Expand-Archive $ffZip $ffDir -Force
+          $ffmpeg=Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse|Select-Object -First 1
+          $ffprobe=Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse|Select-Object -First 1
+          if(-not $ffmpeg -or -not $ffprobe){throw 'FFmpeg tools missing'}
+          Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force
+          Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Setup EXE
+        shell: powershell
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" native-v2.1\installer\AIRI-DM-Native.iss'
+
+      - name: Verify package
+        shell: powershell
+        run: |
+          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.1.exe'
+          $app='native-v2.1\build-win\Release\AIRI Download Manager.exe'
+          $bridge='native-v2.1\build-win\Release\AIRIDMBridge.exe'
+          foreach($f in @($setup,$app,$bridge)){if(-not(Test-Path $f)){throw "Missing $f"}}
+          if((Get-Item $setup).Length -lt 20000000){throw 'Installer unexpectedly small'}
+
+      - name: Create SHA256 manifest
+        shell: powershell
+        run: |
+          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.1.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
+          $lines=foreach($f in $files){$h=Get-FileHash $f -Algorithm SHA256;"$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))"}
+          $lines|Set-Content native-v2.1\SHA256SUMS.txt
+
+      - name: Upload final AIRI v2.6.1 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIRI-Download-Manager-v2.6.1-Commercial-Windows
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.1.exe
+            native-v2.1/build-win/Release/AIRI Download Manager.exe
+            native-v2.1/build-win/Release/AIRIDMBridge.exe
+            native-v2.1/browser-extension/**
+            native-v2.1/SHA256SUMS.txt
+
+      - name: Publish AIRI v2.6.1 Stable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.6.1-airi-stable
+          name: AIRI Download Manager v2.6.1 AIRI Stable
+          prerelease: true
+          body: |
+            AIRI Download Manager v2.6.1 commercial field-test build.
+            Developed by AIRI Technology. Founder: Akhbar Arianda.
+            Includes the 14-day trial and the AIRI production public signing key used by AIRI License Manager Admin Edition.
+          files: |
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.1.exe
+            native-v2.1/build-win/Release/AIRI Download Manager.exe
+            native-v2.1/build-win/Release/AIRIDMBridge.exe
+            native-v2.1/SHA256SUMS.txt
