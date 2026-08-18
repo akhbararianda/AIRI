@@ -30,7 +30,7 @@ if(WIN32)
     target_link_libraries(airi_engine PUBLIC airi_common winhttp shlwapi shell32)
 
     add_library(airi_license STATIC
-        src/app/licensing_v2.cpp
+        src/app/licensing_v3.cpp
         src/app/licensing_cloud_access.cpp
     )
     target_include_directories(airi_license PUBLIC src)
@@ -49,6 +49,7 @@ if(WIN32)
 
     add_executable(AIRIDownloadManager WIN32
         src/app/main_v26_airi.cpp
+        src/app/license_cloud_agent.cpp
         src/app/app.rc
     )
     target_compile_definitions(AIRIDownloadManager PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
