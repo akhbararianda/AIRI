@@ -1,0 +1,99 @@
+name: Test AIRI License Cloud
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'license-cloud/**'
+      - '.github/workflows/test-airi-license-cloud.yml'
+
+jobs:
+  test-cloud:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: airi_license
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, openssl, mbstring, json
+          coverage: none
+
+      - name: Lint PHP
+        shell: bash
+        run: |
+          set -euo pipefail
+          find license-cloud -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Verify AIRI public key
+        shell: bash
+        run: |
+          php -r '$p=openssl_pkey_get_public(file_get_contents("license-cloud/keys/airi-license-public.pem")); if(!$p){fwrite(STDERR,"public key invalid\n"); exit(1);} echo "AIRI public key OK\n";'
+
+      - name: Import database schema
+        shell: bash
+        run: mysql -h 127.0.0.1 -uroot -proot airi_license < license-cloud/schema.sql
+
+      - name: Create CI config
+        shell: bash
+        run: |
+          HASH=$(php -r 'echo password_hash("ci-password", PASSWORD_DEFAULT);')
+          cat > license-cloud/config.php <<PHP
+          <?php
+          return [
+            'dsn'=>'mysql:host=127.0.0.1;port=3306;dbname=airi_license;charset=utf8mb4',
+            'db_user'=>'root',
+            'db_pass'=>'root',
+            'app_secret'=>'ci-secret-0123456789abcdef0123456789abcdef',
+            'admin_user'=>'admin',
+            'admin_password_hash'=>'$HASH',
+            'base_url'=>'https://license.test.invalid',
+          ];
+          PHP
+
+      - name: Smoke test registration and heartbeat
+        shell: bash
+        run: |
+          php -r '
+            require "license-cloud/app/license.php";
+            $id="11111111-2222-4333-8444-555555555555";
+            $mh=str_repeat("a",64);
+            $r=airi_api_register(["installation_id"=>$id,"machine_hash"=>$mh,"app_version"=>"2.7.0","os_version"=>"Windows CI","architecture"=>"x64","license_state"=>"trial"]);
+            if($r["http"]!==200 || empty($r["body"]["allowed"])) exit(10);
+            $h=airi_api_heartbeat(["installation_id"=>$id,"machine_hash"=>$mh,"app_version"=>"2.7.0","os_version"=>"Windows CI","architecture"=>"x64","license_state"=>"trial"]);
+            if($h["http"]!==200 || empty($h["body"]["allowed"])) exit(11);
+            echo "Registration/heartbeat OK\n";
+          '
+
+      - name: Smoke test integrity tracking
+        shell: bash
+        run: |
+          php -r '
+            require "license-cloud/app/integrity.php";
+            $id="11111111-2222-4333-8444-555555555555";
+            $r=airi_integrity_report($id,str_repeat("b",64));
+            if(empty($r["ok"]) || $r["state"]!=="unregistered") exit(20);
+            echo "Integrity tracking OK\n";
+          '
+
+      - name: Verify tables
+        shell: bash
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -N airi_license -e "SHOW TABLES" | sort
+          test "$(mysql -h 127.0.0.1 -uroot -proot -N airi_license -e 'SELECT COUNT(*) FROM installations')" -eq 1
