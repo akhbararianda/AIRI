@@ -1,1 +1,2 @@
 AIRI Fusion Launcher v19 validation build
+sync=2
