@@ -5,10 +5,15 @@
 *.key
 commercial-tools/private/
 
+# AIRI License Cloud deployment secrets
+license-cloud/config.php
+license-cloud/.env
+
 # Windows build outputs
 native-v2.1/build-win/
 native-v2.1/installer/Output/
 native-v2.1/third_party/tools/
+native-v2.1/cloud-config/
 
 # Local tooling
 __pycache__/
