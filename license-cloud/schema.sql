@@ -7,6 +7,8 @@ CREATE TABLE installations (
     architecture VARCHAR(32) NOT NULL DEFAULT '',
     channel VARCHAR(32) NOT NULL DEFAULT 'commercial',
     license_state VARCHAR(24) NOT NULL DEFAULT 'unlicensed',
+    binary_hash CHAR(64) NULL,
+    integrity_state VARCHAR(24) NOT NULL DEFAULT 'unknown',
     risk_score INT NOT NULL DEFAULT 0,
     first_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -17,6 +19,8 @@ CREATE TABLE installations (
     PRIMARY KEY (id),
     UNIQUE KEY uq_installation_id (installation_id),
     KEY ix_machine_hash (machine_hash),
+    KEY ix_binary_hash (binary_hash),
+    KEY ix_integrity_state (integrity_state),
     KEY ix_last_seen (last_seen),
     KEY ix_license_state (license_state),
     KEY ix_risk_score (risk_score)
@@ -61,6 +65,22 @@ CREATE TABLE license_devices (
     KEY ix_machine_hash (machine_hash),
     KEY ix_device_status (status),
     CONSTRAINT fk_license_devices_license FOREIGN KEY (license_id) REFERENCES licenses(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE release_builds (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    app_version VARCHAR(32) NOT NULL,
+    channel VARCHAR(32) NOT NULL DEFAULT 'commercial',
+    exe_sha256 CHAR(64) NOT NULL,
+    status VARCHAR(24) NOT NULL DEFAULT 'allowed',
+    enforce_integrity TINYINT(1) NOT NULL DEFAULT 0,
+    notes VARCHAR(255) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_release_hash (app_version,channel,exe_sha256),
+    KEY ix_release_version (app_version,channel),
+    KEY ix_release_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE security_events (
