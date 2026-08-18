@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(AIRIDownloadManagerNative VERSION 2.6.2 LANGUAGES CXX)
+project(AIRIDownloadManagerNative VERSION 2.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,10 +29,18 @@ if(WIN32)
     target_compile_definitions(airi_engine PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(airi_engine PUBLIC airi_common winhttp shlwapi shell32)
 
-    add_library(airi_license STATIC src/app/licensing_v2.cpp)
+    add_library(airi_license STATIC
+        src/app/licensing_v2.cpp
+        src/app/licensing_cloud_access.cpp
+    )
     target_include_directories(airi_license PUBLIC src)
     target_compile_definitions(airi_license PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(airi_license PUBLIC airi_common bcrypt advapi32)
+
+    add_library(airi_cloud STATIC src/app/license_cloud_v2.cpp)
+    target_include_directories(airi_cloud PUBLIC src)
+    target_compile_definitions(airi_cloud PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(airi_cloud PUBLIC airi_license airi_common winhttp bcrypt advapi32)
 
     add_executable(airi_license_tests tests/license_tests.cpp)
     target_compile_definitions(airi_license_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -44,7 +52,7 @@ if(WIN32)
         src/app/app.rc
     )
     target_compile_definitions(AIRIDownloadManager PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(AIRIDownloadManager PRIVATE airi_engine airi_license airi_common comctl32 shell32 shlwapi dwmapi ole32 bcrypt)
+    target_link_libraries(AIRIDownloadManager PRIVATE airi_engine airi_license airi_cloud airi_common comctl32 shell32 shlwapi dwmapi ole32 bcrypt winhttp)
     set_target_properties(AIRIDownloadManager PROPERTIES OUTPUT_NAME "AIRI Download Manager")
 
     add_executable(AIRIDMBridge WIN32 src/bridge/main.cpp)
