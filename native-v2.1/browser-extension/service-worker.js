@@ -7,6 +7,7 @@ async function cookieHeader(url){try{return (await chrome.cookies.getAll({url}))
 function nativeSend(payload){return new Promise(resolve=>chrome.runtime.sendNativeMessage(HOST,payload,response=>{const e=chrome.runtime.lastError;resolve({ok:!e&&!!response?.ok,response,error:e?.message||response?.message||''})}))}
 function rememberMedia(tabId,url,type=''){if(tabId<0||!/^https?:\/\//i.test(url))return;let arr=mediaByTab.get(tabId)||[];arr=arr.filter(x=>x.url!==url);arr.unshift({url,type,ts:Date.now()});if(arr.length>40)arr.length=40;mediaByTab.set(tabId,arr)}
 function likelyMediaUrl(url){return /\.(mp4|m4v|webm|mov|mkv|mp3|m4a|aac|ogg|wav|flac|m3u8|mpd)(?:[?#]|$)/i.test(url)||/[?&](mime|type)=(?:video|audio)/i.test(decodeURIComponent(url));}
+function manifestUrl(url){return /\.(m3u8|mpd)(?:[?#]|$)/i.test(url);}
 
 chrome.webRequest.onHeadersReceived.addListener(details=>{
   if(details.tabId<0)return;
@@ -29,14 +30,15 @@ chrome.runtime.onMessage.addListener((m,s,send)=>{
   if(m?.type==='airi-universal-media'){
     (async()=>{
       const tabId=s.tab?.id??-1;
-      const direct=[...(m.directUrls||[]),...(mediaByTab.get(tabId)||[]).map(x=>x.url)].filter((u,i,a)=>/^https?:\/\//i.test(u)&&a.indexOf(u)===i);
+      const all=[...(m.directUrls||[]),...(mediaByTab.get(tabId)||[]).map(x=>x.url)].filter((u,i,a)=>/^https?:\/\//i.test(u)&&a.indexOf(u)===i);
       const pageUrl=m.pageUrl||s.tab?.url||'';
+      const direct=all.filter(u=>!manifestUrl(u));
       let result=null;
       for(const url of direct.slice(0,8)){
         result=await nativeSend({action:'download',url,filename:'',referer:pageUrl,cookie:await cookieHeader(url),userAgent:navigator.userAgent||'',source:'universal-media-direct'});
         if(result.ok){send(result);return;}
       }
-      result=await nativeSend({action:'media_page',pageUrl,title:m.title||s.tab?.title||'Media',quality:'best',cookie:await cookieHeader(pageUrl),referer:pageUrl,userAgent:navigator.userAgent||'',source:'universal-media-page'});
+      result=await nativeSend({action:'media_page',pageUrl,title:m.title||s.tab?.title||'Media',quality:'best',cookie:await cookieHeader(pageUrl),referer:pageUrl,userAgent:navigator.userAgent||'',source:'universal-media-page',detectedStreams:all.slice(0,12)});
       send(result);
     })();
     return true;
