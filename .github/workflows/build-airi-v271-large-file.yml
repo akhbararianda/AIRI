@@ -1,0 +1,201 @@
+name: Build AIRI Download Manager v2.7.1 Large File Stability
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'native-v2.1/**'
+      - 'license-cloud/**'
+      - '.github/workflows/build-airi-v271-large-file.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    env:
+      AIRI_CLOUD_URL: ${{ vars.AIRI_LICENSE_CLOUD_URL }}
+      AIRI_CLOUD_ENFORCE: ${{ vars.AIRI_LICENSE_CLOUD_ENFORCE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate AIRI branding assets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Add-Type -AssemblyName System.Drawing
+          $appDir=Join-Path $PWD 'native-v2.1\src\app'
+          $extDir=Join-Path $PWD 'native-v2.1\browser-extension\icons'
+          New-Item -ItemType Directory -Force $extDir | Out-Null
+          $bmp=New-Object System.Drawing.Bitmap 256,256
+          $g=[System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $cream=[System.Drawing.Color]::FromArgb(255,248,234)
+          $blue=[System.Drawing.Color]::FromArgb(15,76,129)
+          $white=[System.Drawing.Color]::White
+          $g.Clear($cream)
+          $bBlue=New-Object System.Drawing.SolidBrush($blue)
+          $bWhite=New-Object System.Drawing.SolidBrush($white)
+          $g.FillEllipse($bBlue,18,18,220,220)
+          $fontA=New-Object System.Drawing.Font('Segoe UI',92,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $fontD=New-Object System.Drawing.Font('Segoe UI',64,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $sf=New-Object System.Drawing.StringFormat
+          $sf.Alignment=[System.Drawing.StringAlignment]::Center
+          $sf.LineAlignment=[System.Drawing.StringAlignment]::Center
+          $g.DrawString('A',$fontA,$bWhite,(New-Object System.Drawing.RectangleF(22,22,150,180)),$sf)
+          $g.DrawString([char]0x2193,$fontD,$bWhite,(New-Object System.Drawing.RectangleF(120,76,110,130)),$sf)
+          $ico=[System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $fs=[System.IO.File]::Create((Join-Path $appDir 'airi.ico'));$ico.Save($fs);$fs.Close()
+          foreach($size in 16,32,48,128){
+            $small=New-Object System.Drawing.Bitmap $size,$size
+            $sg=[System.Drawing.Graphics]::FromImage($small)
+            $sg.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $sg.DrawImage($bmp,0,0,$size,$size)
+            $small.Save((Join-Path $extDir ("icon$size.png")),[System.Drawing.Imaging.ImageFormat]::Png)
+            $sg.Dispose();$small.Dispose()
+          }
+          $ico.Dispose();$fontA.Dispose();$fontD.Dispose();$bBlue.Dispose();$bWhite.Dispose();$g.Dispose();$bmp.Dispose()
+
+      - name: Configure optional AIRI License Cloud endpoint
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:AIRI_CLOUD_URL){
+            if(-not $env:AIRI_CLOUD_URL.StartsWith('https://')){throw 'AIRI_LICENSE_CLOUD_URL must use HTTPS'}
+            New-Item -ItemType Directory -Force 'native-v2.1\cloud-config' | Out-Null
+            $env:AIRI_CLOUD_URL.TrimEnd('/') | Set-Content 'native-v2.1\cloud-config\airi-cloud.url' -Encoding ascii
+            if($env:AIRI_CLOUD_ENFORCE -eq '1'){'1' | Set-Content 'native-v2.1\cloud-config\airi-cloud.enforce' -Encoding ascii}
+          }
+
+      - name: Patch visible product identity
+        shell: powershell
+        run: |
+          $p='native-v2.1\src\app\main_v25_modern.cpp'
+          $s=Get-Content $p -Raw
+          $s=$s.Replace('v2.6.1 AIRI Stable','v2.7.1 Large File Stability')
+          $s=$s.Replace('v2.6.2 Commercial','v2.7.1 Large File Stability')
+          $s=$s.Replace('v2.7 License Cloud','v2.7.1 Large File Stability')
+          $s=$s.Replace('AIRI Download Manager v2.6.1 AIRI Stable','AIRI Download Manager v2.7.1 Large File Stability')
+          $s=$s.Replace('AIRI Download Manager v2.6.2 Commercial','AIRI Download Manager v2.7.1 Large File Stability')
+          $s=$s.Replace('AIRI Download Manager v2.7 License Cloud','AIRI Download Manager v2.7.1 Large File Stability')
+          Set-Content $p $s -Encoding UTF8
+
+      - name: Verify resilient engine sources
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $cm=Get-Content 'native-v2.1\CMakeLists.txt' -Raw
+          if(-not $cm.Contains('VERSION 2.7.1')){throw 'CMake version is not 2.7.1'}
+          if(-not $cm.Contains('download_engine_v271.cpp')){throw 'Resilient large-file engine is not compiled'}
+          $engine=Get-Content 'native-v2.1\src\engine\download_engine_v271.cpp' -Raw
+          foreach($needle in @('WinHttpSetTimeouts','Large-file recovery','Accept-Encoding: identity','maxAttempts')){if(-not $engine.Contains($needle)){throw "Missing resilience feature: $needle"}}
+          foreach($needle in @('licensing_v3.cpp','license_cloud_v2.cpp','license_cloud_agent.cpp')){if(-not $cm.Contains($needle)){throw "Missing cloud source: $needle"}}
+          $iss=Get-Content 'native-v2.1\installer\AIRI-DM-Native.iss' -Raw
+          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.7.1')){throw 'Installer output is not v2.7.1'}
+
+      - name: Configure x64
+        shell: powershell
+        run: cmake -S native-v2.1 -B native-v2.1\build-win -A x64
+
+      - name: Build Release
+        shell: powershell
+        run: cmake --build native-v2.1\build-win --config Release --parallel
+
+      - name: Run native tests
+        shell: powershell
+        run: ctest --test-dir native-v2.1\build-win -C Release --output-on-failure
+
+      - name: Bundle media engine
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $tools=Join-Path $PWD 'native-v2.1\third_party\tools';New-Item -ItemType Directory -Force $tools|Out-Null
+          $yt=Join-Path $tools 'yt-dlp.exe'
+          Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp.exe' -OutFile $yt
+          $ytHash=(Get-FileHash $yt -Algorithm SHA256).Hash.ToLower()
+          if($ytHash -ne '52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8'){throw "yt-dlp checksum mismatch: $ytHash"}
+          $denoZip=Join-Path $env:RUNNER_TEMP 'deno.zip';Invoke-WebRequest -Uri 'https://github.com/denoland/deno/releases/download/v2.9.5/deno-x86_64-pc-windows-msvc.zip' -OutFile $denoZip
+          $denoDir=Join-Path $env:RUNNER_TEMP 'deno';Expand-Archive $denoZip $denoDir -Force;Copy-Item (Join-Path $denoDir 'deno.exe') (Join-Path $tools 'deno.exe') -Force
+          $ffZip=Join-Path $env:RUNNER_TEMP 'ffmpeg.zip';Invoke-WebRequest -Uri 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $ffZip
+          $ffDir=Join-Path $env:RUNNER_TEMP 'ffmpeg';Expand-Archive $ffZip $ffDir -Force
+          $ffmpeg=Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse|Select-Object -First 1
+          $ffprobe=Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse|Select-Object -First 1
+          if(-not $ffmpeg -or -not $ffprobe){throw 'FFmpeg tools missing'}
+          Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force
+          Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Setup EXE
+        shell: powershell
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" native-v2.1\installer\AIRI-DM-Native.iss'
+
+      - name: Package License Cloud
+        shell: powershell
+        run: |
+          if(Test-Path 'AIRI-License-Cloud-v1.0.zip'){Remove-Item 'AIRI-License-Cloud-v1.0.zip' -Force}
+          Compress-Archive -Path 'license-cloud\*' -DestinationPath 'AIRI-License-Cloud-v1.0.zip' -CompressionLevel Optimal
+
+      - name: Verify package
+        shell: powershell
+        run: |
+          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.7.1.exe'
+          $app='native-v2.1\build-win\Release\AIRI Download Manager.exe'
+          $bridge='native-v2.1\build-win\Release\AIRIDMBridge.exe'
+          foreach($f in @($setup,$app,$bridge,'AIRI-License-Cloud-v1.0.zip')){if(-not(Test-Path $f)){throw "Missing $f"}}
+          if((Get-Item $setup).Length -lt 20000000){throw 'Installer unexpectedly small'}
+
+      - name: Create SHA256 manifest
+        shell: powershell
+        run: |
+          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.7.1.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe','AIRI-License-Cloud-v1.0.zip')
+          $lines=foreach($f in $files){$h=Get-FileHash $f -Algorithm SHA256;"$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))"}
+          $lines|Set-Content native-v2.1\SHA256SUMS-v2.7.1.txt
+          Get-Content native-v2.1\SHA256SUMS-v2.7.1.txt
+
+      - name: Upload AIRI v2.7.1 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIRI-v2.7.1-Large-File-Stability-Windows
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.7.1.exe
+            native-v2.1/build-win/Release/AIRI Download Manager.exe
+            native-v2.1/build-win/Release/AIRIDMBridge.exe
+            native-v2.1/browser-extension/**
+            native-v2.1/SHA256SUMS-v2.7.1.txt
+            AIRI-License-Cloud-v1.0.zip
+
+      - name: Publish AIRI v2.7.1 release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.7.1-large-file-stability
+          name: AIRI Download Manager v2.7.1 — Large File Stability
+          prerelease: true
+          body: |
+            AIRI Download Manager v2.7.1 fixes large ISO/archive downloads failing mid-transfer.
+            Developed by AIRI Technology. Founder: Akhbar Arianda.
+
+            Large-file reliability improvements:
+            - Per-range automatic retries instead of failing the whole task on one dropped connection.
+            - Resume an interrupted chunk from its last confirmed byte.
+            - Exponential retry backoff.
+            - 120-second WinHTTP receive timeout for slow/stalled servers.
+            - Strict HTTP 206 + Content-Range validation.
+            - Recovery pass for failed/missing ranges.
+            - Sequential fallback retries when range downloads are unavailable.
+            - Disk-space/preallocation checks for multi-GB files.
+            - Large files cap Turbo workers at 16 to reduce server/network instability.
+            - Existing v2.7 License Cloud and commercial licensing features remain included.
+          files: |
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.7.1.exe
+            native-v2.1/build-win/Release/AIRI Download Manager.exe
+            native-v2.1/build-win/Release/AIRIDMBridge.exe
+            native-v2.1/SHA256SUMS-v2.7.1.txt
+            AIRI-License-Cloud-v1.0.zip
