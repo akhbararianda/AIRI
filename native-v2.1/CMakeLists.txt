@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(AIRIDownloadManagerNative VERSION 2.6.0 LANGUAGES CXX)
+project(AIRIDownloadManagerNative VERSION 2.6.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,9 +29,13 @@ if(WIN32)
     target_compile_definitions(airi_engine PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(airi_engine PUBLIC airi_common winhttp shlwapi shell32)
 
-    add_executable(AIRIDownloadManager WIN32 src/app/main_v26_airi.cpp src/app/app.rc)
+    add_executable(AIRIDownloadManager WIN32
+        src/app/main_v26_airi.cpp
+        src/app/licensing.cpp
+        src/app/app.rc
+    )
     target_compile_definitions(AIRIDownloadManager PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(AIRIDownloadManager PRIVATE airi_engine airi_common comctl32 shell32 shlwapi dwmapi ole32)
+    target_link_libraries(AIRIDownloadManager PRIVATE airi_engine airi_common comctl32 shell32 shlwapi dwmapi ole32 bcrypt)
     set_target_properties(AIRIDownloadManager PROPERTIES OUTPUT_NAME "AIRI Download Manager")
 
     add_executable(AIRIDMBridge WIN32 src/bridge/main.cpp)
