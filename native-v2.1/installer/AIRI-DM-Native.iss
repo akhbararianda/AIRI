@@ -1,5 +1,5 @@
 #define MyAppName "AIRI Download Manager"
-#define MyAppVersion "2.2.0"
+#define MyAppVersion "2.5.0"
 #define MyAppExeName "AIRI Download Manager.exe"
 [Setup]
 AppId={{A912D0A5-5174-4A17-9264-96861F245E71}
@@ -7,7 +7,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 DefaultDirName={localappdata}\Programs\AIRI Download Manager
 DefaultGroupName=AIRI Download Manager
-OutputBaseFilename=AIRI-Download-Manager-Setup-v2.2
+OutputBaseFilename=AIRI-Download-Manager-Setup-v2.5
 OutputDir=Output
 SetupIconFile=..\src\app\airi.ico
 Compression=lzma2
