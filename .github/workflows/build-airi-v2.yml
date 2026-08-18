@@ -61,7 +61,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $p='native-v2.1\src\app\main_v25.cpp'
           $s=Get-Content $p -Raw
-          $s=$s.Replace('#include <chrono>','#include <chrono>`r`n#include <cwctype>')
+          $s=$s.Replace('#include <chrono>',"#include <chrono>`r`n#include <cwctype>")
           $old='void layout(HWND h){RECT r{};GetClientRect(h,&r);int w=r.right;int top=214;MoveWindow(g_search,24,158,260,36,TRUE);MoveWindow(g_filter,296,158,150,220,TRUE);int bx=w-24;MoveWindow(g_open,bx-112,158,112,36,TRUE);bx-=122;MoveWindow(g_resume_all,bx-112,158,112,36,TRUE);bx-=122;MoveWindow(g_pause_all,bx-112,158,112,36,TRUE);MoveWindow(g_list,24,top,w-48,std::max(120,r.bottom-top-56),TRUE);}'
           $new='void layout(HWND h){RECT r{};GetClientRect(h,&r);int w=(int)r.right;int y=158,top=214;int x=24;MoveWindow(g_search,x,y,220,36,TRUE);x+=232;MoveWindow(g_filter,x,y,132,220,TRUE);x+=144;MoveWindow(g_add,x,y,126,36,TRUE);x+=134;MoveWindow(g_pause,x,y,82,36,TRUE);x+=90;MoveWindow(g_resume,x,y,88,36,TRUE);x+=96;MoveWindow(g_cancel,x,y,82,36,TRUE);x+=90;MoveWindow(g_pause_all,x,y,96,36,TRUE);x+=104;MoveWindow(g_resume_all,x,y,102,36,TRUE);x+=110;MoveWindow(g_open,x,y,108,36,TRUE);MoveWindow(g_list,24,top,std::max(400,w-48),(int)std::max<LONG>(120,r.bottom-top-56),TRUE);}'
           if(-not $s.Contains($old)){throw 'v2.5 layout signature changed'}
