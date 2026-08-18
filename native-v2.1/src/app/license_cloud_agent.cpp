@@ -28,7 +28,7 @@ struct AIRICloudAgent {
             auto key=airi::license::stored_license_key();
             if(!key.empty()&&key!=previousKey){airi::cloud::activation_async(key,info,version);previousKey=key;}
             if(ticks==0||ticks>=120){airi::cloud::heartbeat_async(info,version);ticks=0;}
-            if(!sentIntegrity){auto hash=self_sha256();if(!hash.empty()){Sleep(2500);airi::cloud::report_event_async("binary_fingerprint",hash);sentIntegrity=true;}}
+            if(!sentIntegrity){auto hash=self_sha256();if(!hash.empty()){Sleep(2500);airi::cloud::report_event_async("binary_fingerprint",hash);sentIntegrity=true;Sleep(5000);airi::cloud::heartbeat_async(airi::license::current(),version);}}
             if(info.state==airi::license::State::ClockRollback&&!reportedClock){airi::cloud::report_event_async("clock_rollback","local_trial_clock_rollback");reportedClock=true;}
             Sleep(30000);++ticks;
         }
