@@ -29,7 +29,7 @@ if(WIN32)
     target_compile_definitions(airi_engine PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(airi_engine PUBLIC airi_common winhttp shlwapi shell32)
 
-    add_library(airi_license STATIC src/app/licensing.cpp)
+    add_library(airi_license STATIC src/app/licensing_v2.cpp)
     target_include_directories(airi_license PUBLIC src)
     target_compile_definitions(airi_license PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(airi_license PUBLIC airi_common bcrypt advapi32)
