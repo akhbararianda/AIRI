@@ -1,4 +1,4 @@
-name: Build AIRI Download Manager v2.6.1 Commercial Final
+name: Build AIRI Download Manager v2.6.2 Commercial Stable
 
 on:
   workflow_dispatch:
@@ -55,20 +55,30 @@ jobs:
           }
           $icon.Dispose();$fontA.Dispose();$fontD.Dispose();$brushBlue.Dispose();$brushWhite.Dispose();$g.Dispose();$bmp.Dispose()
 
+      - name: Patch visible product version
+        shell: powershell
+        run: |
+          $p='native-v2.1\src\app\main_v25_modern.cpp'
+          $s=Get-Content $p -Raw
+          $s=$s.Replace('v2.5 Modern','v2.6.2 Commercial')
+          $s=$s.Replace('v2.6 AIRI Edition','v2.6.2 Commercial')
+          $s=$s.Replace('AIRI Download Manager v2.5 Modern','AIRI Download Manager v2.6.2 Commercial')
+          $s=$s.Replace('AIRI Download Manager v2.6 AIRI Edition','AIRI Download Manager v2.6.2 Commercial')
+          Set-Content $p $s -Encoding UTF8
+
       - name: Verify production commercial licensing
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $cm=Get-Content 'native-v2.1\CMakeLists.txt' -Raw
-          if(-not $cm.Contains('VERSION 2.6.1')){throw 'CMake version is not 2.6.1'}
+          if(-not $cm.Contains('VERSION 2.6.2')){throw 'CMake version is not 2.6.2'}
           if(-not $cm.Contains('licensing_v2.cpp')){throw 'Production licensing implementation is not compiled'}
           if(-not(Test-Path 'native-v2.1\src\app\licensing_v2.cpp')){throw 'Production licensing implementation missing'}
           if(-not(Test-Path 'native-v2.1\tests\license_tests.cpp')){throw 'License tests missing'}
           $license=Get-Content 'native-v2.1\src\app\licensing_v2.cpp' -Raw
           if(-not $license.Contains('0xd0,0xf5,0xe8,0xc0')){throw 'Expected AIRI production public key not embedded'}
-          if(-not(Test-Path 'native-v2.1\src\app\main_v26_airi.cpp')){throw 'AIRI themed shell missing'}
           $iss=Get-Content 'native-v2.1\installer\AIRI-DM-Native.iss' -Raw
-          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.6.1')){throw 'Installer output is not v2.6.1'}
+          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.6.2')){throw 'Installer output is not v2.6.2'}
           if(-not $iss.Contains('AIRI Technology')){throw 'Publisher metadata missing'}
 
       - name: Configure x64
@@ -113,7 +123,7 @@ jobs:
       - name: Verify package
         shell: powershell
         run: |
-          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.1.exe'
+          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.2.exe'
           $app='native-v2.1\build-win\Release\AIRI Download Manager.exe'
           $bridge='native-v2.1\build-win\Release\AIRIDMBridge.exe'
           foreach($f in @($setup,$app,$bridge)){if(-not(Test-Path $f)){throw "Missing $f"}}
@@ -122,35 +132,35 @@ jobs:
       - name: Create SHA256 manifest
         shell: powershell
         run: |
-          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.1.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
+          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.2.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
           $lines=foreach($f in $files){$h=Get-FileHash $f -Algorithm SHA256;"$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))"}
           $lines|Set-Content native-v2.1\SHA256SUMS.txt
 
-      - name: Upload final AIRI v2.6.1 artifact
+      - name: Upload AIRI v2.6.2 commercial artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Download-Manager-v2.6.1-Commercial-Windows
+          name: AIRI-Download-Manager-v2.6.2-Commercial-Windows
           retention-days: 30
           if-no-files-found: error
           path: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.1.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.2.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/browser-extension/**
             native-v2.1/SHA256SUMS.txt
 
-      - name: Publish AIRI v2.6.1 Stable release
+      - name: Publish AIRI v2.6.2 Commercial Stable release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.6.1-airi-stable
-          name: AIRI Download Manager v2.6.1 AIRI Stable
+          tag_name: v2.6.2-commercial-stable
+          name: AIRI Download Manager v2.6.2 Commercial Stable
           prerelease: true
           body: |
-            AIRI Download Manager v2.6.1 commercial field-test build.
+            AIRI Download Manager v2.6.2 commercial field-test build.
             Developed by AIRI Technology. Founder: Akhbar Arianda.
-            Includes the 14-day trial and the AIRI production public signing key used by AIRI License Manager Admin Edition.
+            This build contains the production AIRI public signing key paired with AIRI License Manager Admin Edition v1.0, plus the 14-day trial and repaired media controls.
           files: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.1.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.2.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/SHA256SUMS.txt
