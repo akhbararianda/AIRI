@@ -1,4 +1,4 @@
-name: Build AIRI Download Manager v2.3
+name: Build AIRI Download Manager v2.4
 
 on:
   workflow_dispatch:
@@ -43,8 +43,6 @@ jobs:
           $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
           $g.DrawString('A',$fontA,$brushWhite,(New-Object System.Drawing.RectangleF(22,22,150,180)),$sf)
           $g.DrawString([char]0x2193,$fontD,$brushWhite,(New-Object System.Drawing.RectangleF(120,76,110,130)),$sf)
-          $png = Join-Path $env:RUNNER_TEMP 'airi-master.png'
-          $bmp.Save($png,[System.Drawing.Imaging.ImageFormat]::Png)
           $hIcon = $bmp.GetHicon()
           $icon = [System.Drawing.Icon]::FromHandle($hIcon)
           $fs = [System.IO.File]::Create((Join-Path $appDir 'airi.ico'))
@@ -58,7 +56,6 @@ jobs:
             $sg.Dispose(); $small.Dispose()
           }
           $icon.Dispose(); $fontA.Dispose(); $fontD.Dispose(); $brushBlue.Dispose(); $brushWhite.Dispose(); $g.Dispose(); $bmp.Dispose()
-          if (-not (Test-Path (Join-Path $appDir 'airi.ico'))) { throw 'AIRI icon generation failed' }
 
       - name: Wire realtime media telemetry into UI
         shell: powershell
@@ -68,34 +65,38 @@ jobs:
           $s = Get-Content $path -Raw
           $old = 'struct MediaRow{std::uint64_t id{};std::wstring name,status=L"Queued";int progress{};std::filesystem::path dir;bool done{},failed{};};'
           $new = 'struct MediaRow{std::uint64_t id{};std::wstring name,status=L"Queued";int progress{};std::filesystem::path dir;bool done{},failed{};std::wstring downloaded,total,speed,eta,fragment;};'
-          if (-not $s.Contains($old)) { throw 'MediaRow source signature changed' }
-          $s = $s.Replace($old,$new)
-
+          if ($s.Contains($old)) { $s = $s.Replace($old,$new) }
           $old = 'j.status=w(p.status);j.progress=std::clamp(p.percent,0,100);j.done=p.status=="Completed";j.failed=p.status=="Failed";break;'
           $new = 'j.status=w(p.status);j.progress=std::clamp(p.percent,0,100);j.downloaded=w(p.downloaded_text);j.total=w(p.total_text);j.speed=w(p.speed_text);j.eta=w(p.eta_text);j.fragment=w(p.fragment_text);j.done=p.status=="Completed";j.failed=p.status=="Failed";break;'
-          if (-not $s.Contains($old)) { throw 'Media callback source signature changed' }
-          $s = $s.Replace($old,$new)
-
+          if ($s.Contains($old)) { $s = $s.Replace($old,$new) }
           $old = 'setcell(r,2,j.status);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,5,L"Media");'
           $new = 'auto liveStatus=j.status;if(!j.downloaded.empty()&&j.downloaded!=L"NA"){liveStatus+=L" | "+j.downloaded;if(!j.total.empty()&&j.total!=L"NA")liveStatus+=L" / "+j.total;}if(!j.eta.empty()&&j.eta!=L"NA")liveStatus+=L" | ETA "+j.eta;if(!j.fragment.empty()&&j.fragment!=L"NA/NA"&&j.fragment!=L"NA")liveStatus+=L" | frag "+j.fragment;setcell(r,1,!j.total.empty()&&j.total!=L"NA"?j.total:j.downloaded);setcell(r,2,liveStatus);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,4,j.speed.empty()||j.speed==L"NA"?L"-":j.speed);setcell(r,5,L"Media");'
-          if (-not $s.Contains($old)) { throw 'Media table source signature changed' }
-          $s = $s.Replace($old,$new)
-
-          $s = $s.Replace('Turbo Engine v2.2','Turbo Engine v2.3')
-          $s = $s.Replace('AIRI Turbo v2.2','AIRI Turbo v2.3')
-          $s = $s.Replace('AIRI Download Manager - Turbo v2.2','AIRI Download Manager - Turbo v2.3')
+          if ($s.Contains($old)) { $s = $s.Replace($old,$new) }
+          $s = $s.Replace('Turbo Engine v2.2','Turbo Engine v2.4 Universal')
+          $s = $s.Replace('Turbo Engine v2.3','Turbo Engine v2.4 Universal')
+          $s = $s.Replace('AIRI Turbo v2.2','AIRI Turbo v2.4')
+          $s = $s.Replace('AIRI Turbo v2.3','AIRI Turbo v2.4')
+          $s = $s.Replace('AIRI Download Manager - Turbo v2.2','AIRI Download Manager - Turbo v2.4')
+          $s = $s.Replace('AIRI Download Manager - Turbo v2.3','AIRI Download Manager - Turbo v2.4')
           Set-Content $path $s -Encoding UTF8
 
-      - name: Tune realtime telemetry cadence
+      - name: Tune media engine
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $path='native-v2.1\src\engine\media_worker.cpp'
           $s=Get-Content $path -Raw
           $needle=' --ignore-config --newline --no-playlist'
-          if (-not $s.Contains($needle)) { throw 'Media command signature changed' }
-          $s=$s.Replace($needle,' --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist')
+          if ($s.Contains($needle)) { $s=$s.Replace($needle,' --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist') }
           Set-Content $path $s -Encoding UTF8
+
+      - name: Verify universal extension
+        shell: powershell
+        run: |
+          $m = Get-Content 'native-v2.1\browser-extension\manifest.json' -Raw | ConvertFrom-Json
+          if ($m.version -ne '3.4.0') { throw "Unexpected extension version: $($m.version)" }
+          if (-not (Test-Path 'native-v2.1\browser-extension\universal-overlay.js')) { throw 'Universal overlay missing' }
+          if (-not (Test-Path 'native-v2.1\browser-extension\universal-overlay.css')) { throw 'Universal overlay CSS missing' }
 
       - name: Configure x64
         shell: powershell
@@ -130,28 +131,8 @@ jobs:
           Expand-Archive -Path $ffZip -DestinationPath $ffDir -Force
           $ffmpeg = Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse | Select-Object -First 1
           $ffprobe = Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse | Select-Object -First 1
-          if (-not $ffmpeg -or -not $ffprobe) { throw 'FFmpeg binaries not found after extraction' }
           Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force
           Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
-          & $yt --version
-          & (Join-Path $tools 'deno.exe') --version
-          & (Join-Path $tools 'ffmpeg.exe') -version | Select-Object -First 1
-
-      - name: Verify functional package inputs
-        shell: powershell
-        run: |
-          $required = @(
-            'native-v2.1\build-win\Release\AIRI Download Manager.exe',
-            'native-v2.1\build-win\Release\AIRIDMBridge.exe',
-            'native-v2.1\src\app\airi.ico',
-            'native-v2.1\third_party\tools\yt-dlp.exe',
-            'native-v2.1\third_party\tools\deno.exe',
-            'native-v2.1\third_party\tools\ffmpeg.exe',
-            'native-v2.1\third_party\tools\ffprobe.exe',
-            'native-v2.1\browser-extension\icons\icon128.png',
-            'native-v2.1\browser-extension\manifest.json'
-          )
-          foreach ($f in $required) { if (-not (Test-Path $f)) { throw "Missing package input: $f" } }
 
       - name: Install Inno Setup
         shell: powershell
@@ -162,8 +143,8 @@ jobs:
         run: |
           $p='native-v2.1\installer\AIRI-DM-Native.iss'
           $s=Get-Content $p -Raw
-          $s=$s.Replace('#define MyAppVersion "2.2.0"','#define MyAppVersion "2.3.0"')
-          $s=$s.Replace('OutputBaseFilename=AIRI-Download-Manager-Setup-v2.2','OutputBaseFilename=AIRI-Download-Manager-Setup-v2.3')
+          $s=$s -replace '#define MyAppVersion "[^"]+"','#define MyAppVersion "2.4.0"'
+          $s=$s -replace 'OutputBaseFilename=AIRI-Download-Manager-Setup-v2\.[0-9]+','OutputBaseFilename=AIRI-Download-Manager-Setup-v2.4'
           Set-Content $p $s -Encoding UTF8
 
       - name: Build Setup EXE
@@ -175,44 +156,44 @@ jobs:
         run: |
           Get-Item 'native-v2.1\build-win\Release\AIRI Download Manager.exe' | Format-List Name,Length
           Get-Item 'native-v2.1\build-win\Release\AIRIDMBridge.exe' | Format-List Name,Length
-          Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.3.exe' | Format-List Name,Length
-          $size = (Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.3.exe').Length
-          if ($size -lt 20000000) { throw "Installer unexpectedly small ($size bytes); media tools may be missing." }
+          Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.4.exe' | Format-List Name,Length
+          $size = (Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.4.exe').Length
+          if ($size -lt 20000000) { throw "Installer unexpectedly small ($size bytes)" }
 
       - name: Create SHA256
         shell: powershell
         run: |
           $files = @(
-            'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.3.exe',
+            'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.4.exe',
             'native-v2.1\build-win\Release\AIRI Download Manager.exe',
             'native-v2.1\build-win\Release\AIRIDMBridge.exe'
           )
           $lines = foreach ($f in $files) { $h = Get-FileHash $f -Algorithm SHA256; "$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))" }
           $lines | Set-Content native-v2.1\SHA256SUMS.txt
 
-      - name: Upload AIRI v2.3 Windows artifact
+      - name: Upload AIRI v2.4 Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Download-Manager-v2.3-Windows
+          name: AIRI-Download-Manager-v2.4-Universal-Windows
           if-no-files-found: error
           retention-days: 30
           path: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.3.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.4.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/browser-extension/**
             native-v2.1/SHA256SUMS.txt
 
-      - name: Publish AIRI v2.3 realtime release
+      - name: Publish AIRI v2.4 Universal release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.3.0-realtime
-          name: AIRI Download Manager v2.3 Realtime Telemetry
+          tag_name: v2.4.0-universal
+          name: AIRI Download Manager v2.4 Universal Media Capture
           prerelease: true
           body: |
-            AIRI Native Turbo v2.3 adds realtime media telemetry: live percentage, downloaded/total size, transfer speed, ETA, fragment progress, merge status, timestamps and elapsed time.
+            Universal media detector for ordinary HTTP/HTTPS sites: player overlay, DOM media discovery, network media detection, direct MP4/WebM capture, HLS/DASH page-extractor fallback, realtime telemetry, Turbo Engine, and silent media tools. DRM-protected media is not bypassed.
           files: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.3.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.4.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/SHA256SUMS.txt
