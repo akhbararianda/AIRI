@@ -8,6 +8,9 @@ on:
       - 'native-v2.1/**'
       - '.github/workflows/build-airi-v2.yml'
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-2022
@@ -74,13 +77,24 @@ jobs:
           $s = $s.Replace($old,$new)
 
           $old = 'setcell(r,2,j.status);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,5,L"Media");'
-          $new = 'auto liveStatus=j.status;if(!j.eta.empty()&&j.eta!=L"NA")liveStatus+=L" | ETA "+j.eta;if(!j.fragment.empty()&&j.fragment!=L"NA/NA"&&j.fragment!=L"NA")liveStatus+=L" | "+j.fragment;setcell(r,1,!j.total.empty()&&j.total!=L"NA"?j.total:j.downloaded);setcell(r,2,liveStatus);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,4,j.speed.empty()||j.speed==L"NA"?L"-":j.speed);setcell(r,5,L"Media");'
+          $new = 'auto liveStatus=j.status;if(!j.downloaded.empty()&&j.downloaded!=L"NA"){liveStatus+=L" | "+j.downloaded;if(!j.total.empty()&&j.total!=L"NA")liveStatus+=L" / "+j.total;}if(!j.eta.empty()&&j.eta!=L"NA")liveStatus+=L" | ETA "+j.eta;if(!j.fragment.empty()&&j.fragment!=L"NA/NA"&&j.fragment!=L"NA")liveStatus+=L" | frag "+j.fragment;setcell(r,1,!j.total.empty()&&j.total!=L"NA"?j.total:j.downloaded);setcell(r,2,liveStatus);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,4,j.speed.empty()||j.speed==L"NA"?L"-":j.speed);setcell(r,5,L"Media");'
           if (-not $s.Contains($old)) { throw 'Media table source signature changed' }
           $s = $s.Replace($old,$new)
 
           $s = $s.Replace('Turbo Engine v2.2','Turbo Engine v2.3')
           $s = $s.Replace('AIRI Turbo v2.2','AIRI Turbo v2.3')
           $s = $s.Replace('AIRI Download Manager - Turbo v2.2','AIRI Download Manager - Turbo v2.3')
+          Set-Content $path $s -Encoding UTF8
+
+      - name: Tune realtime telemetry cadence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path='native-v2.1\src\engine\media_worker.cpp'
+          $s=Get-Content $path -Raw
+          $needle=' --ignore-config --newline --no-playlist'
+          if (-not $s.Contains($needle)) { throw 'Media command signature changed' }
+          $s=$s.Replace($needle,' --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist')
           Set-Content $path $s -Encoding UTF8
 
       - name: Configure x64
@@ -187,4 +201,18 @@ jobs:
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/browser-extension/**
+            native-v2.1/SHA256SUMS.txt
+
+      - name: Publish AIRI v2.3 realtime release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.3.0-realtime
+          name: AIRI Download Manager v2.3 Realtime Telemetry
+          prerelease: true
+          body: |
+            AIRI Native Turbo v2.3 adds realtime media telemetry: live percentage, downloaded/total size, transfer speed, ETA, fragment progress, merge status, timestamps and elapsed time.
+          files: |
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.3.exe
+            native-v2.1/build-win/Release/AIRI Download Manager.exe
+            native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/SHA256SUMS.txt
