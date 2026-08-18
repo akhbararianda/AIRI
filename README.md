@@ -5,7 +5,8 @@ Founder: **Akhbar Arianda**
 
 AIRI Download Manager is a native Windows download manager focused on fast direct downloads, browser integration, universal media detection, realtime telemetry, and a clean AIRI visual identity.
 
-> Current public-testing branch: **v2.6.1 AIRI Stable**
+> Current commercial field-test build: **v2.6.2 Commercial Stable**
+> Official offline license issuer: **AIRI License Manager — Admin Edition v1.1**
 
 ## AIRI Identity
 
@@ -36,9 +37,17 @@ AIRI Download Manager is a native Windows download manager focused on fast direc
 
 AIRI Download Manager includes a **14-day full-feature trial**.
 
-During the trial, all normal download features remain available. When the trial expires, the application can still be opened to view existing information and activate a license, while new AIRI downloads are blocked until activation.
+During the trial, normal download features remain available. When the trial expires, the application can still be opened to review information and activate a license, while new AIRI downloads are blocked until activation.
 
-Commercial licenses use signed license keys and a Machine ID displayed inside AIRI. The client application contains only the public verification key; the private signing key must remain offline with AIRI Technology and must never be committed to this repository.
+Commercial licenses use signed `AIRI1...` keys and a Machine ID displayed inside AIRI. The customer application contains only the production public verification key. The corresponding private signing key stays with AIRI Technology and is never bundled with the customer installer.
+
+The production signing pair is CI-tested with a deliberately expired signed token, proving that the Admin Edition and customer build share the correct RSA key pair without publishing a usable license.
+
+### AIRI License Manager — Admin Edition v1.1
+
+The admin utility is for AIRI Technology only. It can generate signed licenses, keep a local SQLite customer/license database, search license history, resend keys, load a customer for renewal/reissue, and export records to CSV.
+
+The Admin Edition validates the AIRI production public-key fingerprint before it can issue a license. The private signing key is loaded from an external file and is never embedded in the admin executable.
 
 ## Browser Media Capture
 
@@ -48,7 +57,7 @@ AIRI does **not** bypass DRM or protected playback systems such as Widevine.
 
 ## Installation
 
-1. Download the latest Windows installer from **Releases**.
+1. Download the current customer installer from **Releases**.
 2. Install AIRI Download Manager.
 3. Open Chrome or Edge extensions and load/reload the AIRI browser extension if required.
 4. Run **Test AIRI connection** from the extension popup.
@@ -61,7 +70,7 @@ Before a paid production launch, AIRI Technology should additionally complete:
 - Windows Authenticode code signing
 - Chrome Web Store / Microsoft Edge Add-ons publication
 - Product website and checkout
-- License issuance/activation backend or controlled offline sales workflow
+- Online activation/payment backend for larger-scale sales
 - EULA, Privacy Policy, Terms of Sale and support policy
 - Wider Windows compatibility and field testing
 
