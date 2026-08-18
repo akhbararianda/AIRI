@@ -1,5 +1,5 @@
 #define MyAppName "AIRI Download Manager"
-#define MyAppVersion "2.6.0"
+#define MyAppVersion "2.6.1"
 #define MyAppPublisher "AIRI Technology"
 #define MyAppExeName "AIRI Download Manager.exe"
 [Setup]
@@ -11,10 +11,10 @@ AppPublisherURL=https://github.com/akhbararianda/AIRI
 VersionInfoCompany=AIRI Technology
 VersionInfoDescription=AIRI Download Manager - Developed by AIRI Technology, Founder Akhbar Arianda
 VersionInfoProductName=AIRI Download Manager
-VersionInfoProductVersion=2.6.0
+VersionInfoProductVersion=2.6.1
 DefaultDirName={localappdata}\Programs\AIRI Download Manager
 DefaultGroupName=AIRI Download Manager
-OutputBaseFilename=AIRI-Download-Manager-Setup-v2.6
+OutputBaseFilename=AIRI-Download-Manager-Setup-v2.6.1
 OutputDir=Output
 SetupIconFile=..\src\app\airi.ico
 Compression=lzma2
@@ -53,4 +53,4 @@ begin
  SaveStringToFile(ManifestPath,Json,False); RegWriteStringValue(HKCU,'Software\Google\Chrome\NativeMessagingHosts\'+NativeHost,'',ManifestPath); RegWriteStringValue(HKCU,'Software\Microsoft\Edge\NativeMessagingHosts\'+NativeHost,'',ManifestPath);
 end;
 procedure CurStepChanged(CurStep:TSetupStep); begin if CurStep=ssPostInstall then RegisterNativeHost; end;
-procedure CurUninstallStepChanged(CurUninstallStep:TUninstallStep); begin if CurUninstallStep=usUninstall then begin RegDeleteKeyIncludingSubkeys(HKCU,'Software\Google\Chrome\NativeMessagingHosts\'+NativeHost); RegDeleteKeyIncludingSubkeys(HKCU,'Software\Microsoft\Edge\NativeMessagingHosts\'+NativeHost); end; end;
+procedure CurUninstallStepChanged(CurUninstallStep:TUninstallStep); begin if CurUninstallStep=usUninstall then begin RegDeleteKeyIncludingSubkeys(HKCU,'Software\Google\Chrome\NativeMessagingHosts\'+NativeHost); RegDeleteKeyIncludingSubkeys(HKCU,'Software\Microsoft\Edge\\NativeMessagingHosts\'+NativeHost); end; end;
