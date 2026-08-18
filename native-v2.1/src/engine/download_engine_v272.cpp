@@ -1,0 +1,107 @@
+#ifdef _WIN32
+#include "engine/download_engine.h"
+#include "common/airi_text.h"
+#include <windows.h>
+#include <winhttp.h>
+#include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+#pragma comment(lib,"winhttp.lib")
+
+namespace airi { namespace {
+std::wstring W(const std::string&s){if(s.empty())return{};int n=MultiByteToWideChar(CP_UTF8,0,s.data(),(int)s.size(),nullptr,0);std::wstring o((std::size_t)n,L'\0');MultiByteToWideChar(CP_UTF8,0,s.data(),(int)s.size(),o.data(),n);return o;}
+std::string U8(const std::wstring&s){if(s.empty())return{};int n=WideCharToMultiByte(CP_UTF8,0,s.data(),(int)s.size(),nullptr,0,nullptr,nullptr);std::string o((std::size_t)n,'\0');WideCharToMultiByte(CP_UTF8,0,s.data(),(int)s.size(),o.data(),n,nullptr,nullptr);return o;}
+struct Url{std::wstring host,path;INTERNET_PORT port{};bool https{};};
+bool parse(const std::string&u,Url&o){auto w=W(u);URL_COMPONENTS c{sizeof(c)};c.dwHostNameLength=(DWORD)-1;c.dwUrlPathLength=(DWORD)-1;c.dwExtraInfoLength=(DWORD)-1;if(!WinHttpCrackUrl(w.c_str(),0,0,&c))return false;o.host.assign(c.lpszHostName,c.dwHostNameLength);o.path.assign(c.lpszUrlPath,c.dwUrlPathLength);if(c.dwExtraInfoLength)o.path.append(c.lpszExtraInfo,c.dwExtraInfoLength);if(o.path.empty())o.path=L"/";o.port=c.nPort;o.https=c.nScheme==INTERNET_SCHEME_HTTPS;return true;}
+struct Handles{HINTERNET session{},connect{},request{};~Handles(){if(request)WinHttpCloseHandle(request);if(connect)WinHttpCloseHandle(connect);if(session)WinHttpCloseHandle(session);}};
+
+bool open_req(const DownloadRequest&r,const wchar_t*verb,Handles&h,const std::wstring&range=L""){
+    Url u;if(!parse(r.url,u))return false;
+    h.session=WinHttpOpen(L"AIRI Download Manager/2.7.2 PersistentResume",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0);
+    if(!h.session)return false;
+    WinHttpSetTimeouts(h.session,30000,45000,60000,120000);
+    DWORD maxConn=(DWORD)std::clamp(r.connections,1,64);WinHttpSetOption(h.session,WINHTTP_OPTION_MAX_CONNS_PER_SERVER,&maxConn,sizeof(maxConn));
+    h.connect=WinHttpConnect(h.session,u.host.c_str(),u.port,0);if(!h.connect)return false;
+    DWORD flags=u.https?WINHTTP_FLAG_SECURE:0;
+    h.request=WinHttpOpenRequest(h.connect,verb,u.path.c_str(),nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,flags);if(!h.request)return false;
+    std::wstring hdr=L"Accept: */*\r\nAccept-Encoding: identity\r\nConnection: keep-alive\r\n";
+    if(!r.cookie.empty())hdr+=L"Cookie: "+W(r.cookie)+L"\r\n";
+    if(!r.referer.empty())hdr+=L"Referer: "+W(r.referer)+L"\r\n";
+    if(!r.origin.empty())hdr+=L"Origin: "+W(r.origin)+L"\r\n";
+    if(!range.empty())hdr+=L"Range: bytes="+range+L"\r\n";
+    if(!r.user_agent.empty())WinHttpAddRequestHeaders(h.request,(L"User-Agent: "+W(r.user_agent)).c_str(),-1L,WINHTTP_ADDREQ_FLAG_REPLACE|WINHTTP_ADDREQ_FLAG_ADD);
+    WinHttpAddRequestHeaders(h.request,hdr.c_str(),-1L,WINHTTP_ADDREQ_FLAG_ADD);
+    return WinHttpSendRequest(h.request,WINHTTP_NO_ADDITIONAL_HEADERS,0,WINHTTP_NO_REQUEST_DATA,0,0,0)&&WinHttpReceiveResponse(h.request,nullptr);
+}
+DWORD status(HINTERNET q){DWORD v=0,n=sizeof(v);WinHttpQueryHeaders(q,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,nullptr,&v,&n,nullptr);return v;}
+std::uint64_t content_length(HINTERNET q){wchar_t b[128]{};DWORD n=sizeof(b);if(!WinHttpQueryHeaders(q,WINHTTP_QUERY_CONTENT_LENGTH,nullptr,b,&n,nullptr))return 0;try{return std::stoull(b);}catch(...){return 0;}}
+bool content_range(HINTERNET q,std::uint64_t&begin,std::uint64_t&end,std::uint64_t&total){wchar_t b[256]{};DWORD n=sizeof(b);if(!WinHttpQueryHeaders(q,WINHTTP_QUERY_CONTENT_RANGE,nullptr,b,&n,nullptr))return false;std::wstring v=b;auto sp=v.find(L' '),dash=v.find(L'-'),slash=v.find(L'/');if(dash==std::wstring::npos||slash==std::wstring::npos)return false;try{begin=std::stoull(v.substr(sp==std::wstring::npos?0:sp+1,dash-(sp==std::wstring::npos?0:sp+1)));end=std::stoull(v.substr(dash+1,slash-dash-1));total=std::stoull(v.substr(slash+1));return true;}catch(...){return false;}}
+std::wstring disposition_name(HINTERNET q){wchar_t b[2048]{};DWORD n=sizeof(b);if(!WinHttpQueryHeaders(q,WINHTTP_QUERY_CONTENT_DISPOSITION,nullptr,b,&n,nullptr))return{};std::wstring s=b;auto p=s.find(L"filename=");if(p==std::wstring::npos)return{};p+=9;if(p<s.size()&&s[p]=='\"'){auto e=s.find(L'\"',++p);return s.substr(p,e-p);}auto e=s.find(L';',p);return s.substr(p,e==std::wstring::npos?s.size()-p:e-p);}
+void retry_sleep(int attempt){DWORD ms=(DWORD)std::min(16000,750*(1<<std::min(attempt,4)));Sleep(ms);}
+bool has_disk_space(const std::filesystem::path&p,std::uint64_t need){ULARGE_INTEGER freeBytes{};auto root=p.root_path();if(root.empty())root=p.parent_path();if(root.empty())return true;if(!GetDiskFreeSpaceExW(root.c_str(),&freeBytes,nullptr,nullptr))return true;return freeBytes.QuadPart>need+64ull*1024*1024;}
+constexpr std::uint64_t kResumeSegment=8ull*1024*1024;
+std::filesystem::path resume_path(const std::filesystem::path&out){return std::filesystem::path(out.wstring()+L".airi.resume");}
+struct ResumeMap{std::uint64_t total{},segment{kResumeSegment};std::string url;std::vector<unsigned char>done;};
+std::uint64_t segment_bytes(std::size_t index,const ResumeMap&m){auto b=(std::uint64_t)index*m.segment;if(b>=m.total)return 0;return std::min<std::uint64_t>(m.segment,m.total-b);}
+bool load_resume(const std::filesystem::path&p,const std::string&url,std::uint64_t total,ResumeMap&m){std::ifstream f(p,std::ios::binary);if(!f)return false;std::string magic,line;if(!std::getline(f,magic)||magic!="AIRI_RESUME_V1")return false;if(!std::getline(f,line))return false;try{m.total=std::stoull(line);}catch(...){return false;}if(!std::getline(f,line))return false;try{m.segment=std::stoull(line);}catch(...){return false;}if(!std::getline(f,m.url))return false;if(m.total!=total||m.url!=url||m.segment<1024*1024||m.segment>64ull*1024*1024)return false;auto count=(std::size_t)((m.total+m.segment-1)/m.segment);m.done.assign(count,0);while(std::getline(f,line)){if(line.empty())continue;try{auto i=(std::size_t)std::stoull(line);if(i<m.done.size())m.done[i]=1;}catch(...){}}return true;}
+bool save_resume(const std::filesystem::path&p,const ResumeMap&m){auto tmp=std::filesystem::path(p.wstring()+L".tmp");{std::ofstream f(tmp,std::ios::binary|std::ios::trunc);if(!f)return false;f<<"AIRI_RESUME_V1\n"<<m.total<<"\n"<<m.segment<<"\n"<<m.url<<"\n";for(std::size_t i=0;i<m.done.size();++i)if(m.done[i])f<<i<<"\n";f.flush();if(!f)return false;}return MoveFileExW(tmp.c_str(),p.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=FALSE;}
+}
+
+const char* status_name(DownloadStatus x){switch(x){case DownloadStatus::Queued:return"Queued";case DownloadStatus::Probing:return"Probing";case DownloadStatus::Downloading:return"Downloading";case DownloadStatus::Paused:return"Paused";case DownloadStatus::Completed:return"Completed";case DownloadStatus::Failed:return"Failed";case DownloadStatus::Cancelled:return"Cancelled";}return"Unknown";}
+DownloadTask::DownloadTask(std::uint64_t id,DownloadRequest r,Callback cb):id_(id),req_(std::move(r)),cb_(std::move(cb)){s_.id=id_;s_.url=req_.url;s_.filename=req_.filename;}
+DownloadTask::~DownloadTask(){cancelled_=true;paused_=false;if(th_.joinable())th_.join();}
+void DownloadTask::start(){th_=std::thread([this]{run();});}
+void DownloadTask::pause(){paused_=true;{std::lock_guard lk(m_);s_.status=DownloadStatus::Paused;}emit();}
+void DownloadTask::resume(){
+    bool restart=false;{
+        std::lock_guard lk(m_);
+        if(s_.status==DownloadStatus::Paused){paused_=false;s_.status=DownloadStatus::Downloading;}
+        else if(s_.status==DownloadStatus::Failed){restart=true;s_.status=DownloadStatus::Queued;s_.error.clear();s_.bytes_per_second=0;}
+    }
+    if(restart){if(th_.joinable())th_.join();cancelled_=false;paused_=false;downloaded_=0;th_=std::thread([this]{run();});}
+    emit();
+}
+void DownloadTask::cancel(){cancelled_=true;paused_=false;{std::lock_guard lk(m_);s_.status=DownloadStatus::Cancelled;}emit();}
+DownloadSnapshot DownloadTask::snapshot()const{std::lock_guard lk(m_);auto x=s_;x.downloaded_bytes=downloaded_;if(x.total_bytes)x.progress_percent=(int)std::min<std::uint64_t>(100,downloaded_*100/x.total_bytes);return x;}
+void DownloadTask::emit(){if(cb_)cb_(snapshot());}
+void DownloadTask::fail(std::string e){{std::lock_guard lk(m_);s_.status=DownloadStatus::Failed;s_.error=std::move(e);s_.bytes_per_second=0;}emit();}
+void DownloadTask::mark_finished(){}
+void DownloadTask::run(){{std::lock_guard lk(m_);s_.status=DownloadStatus::Probing;}emit();if(!probe())return;if(cancelled_)return;{std::lock_guard lk(m_);s_.status=DownloadStatus::Downloading;}speed_last_time_=std::chrono::steady_clock::now();speed_last_bytes_=downloaded_.load();emit();bool ok=ranges_&&s_.total_bytes>chunk_?segmented():sequential();if(ok&&!cancelled_){{std::lock_guard lk(m_);s_.status=DownloadStatus::Completed;s_.progress_percent=100;s_.bytes_per_second=0;s_.error.clear();}emit();}}
+
+bool DownloadTask::probe(){Handles h;if(!open_req(req_,L"GET",h,L"0-0")){fail("Connection/probe failed");return false;}auto st=status(h.request);ranges_=st==206;std::uint64_t total=0;if(st==206){std::uint64_t rb=0,re=0,rt=0;if(content_range(h.request,rb,re,rt))total=rt;}if(!total)total=content_length(h.request);if(st>=400||!total){fail("Server rejected request or size unavailable (HTTP "+std::to_string(st)+")");return false;}std::string fn=req_.filename;if(fn.empty()){auto d=disposition_name(h.request);fn=d.empty()?text::filename_from_url_utf8(req_.url):U8(d);}fn=text::sanitize_filename_utf8(fn);std::filesystem::create_directories(req_.save_directory);std::filesystem::path out;{std::lock_guard lk(m_);out=s_.output_path;}if(out.empty())out=req_.save_directory/fn;
+    ResumeMap rm;bool resumable=std::filesystem::exists(out)&&load_resume(resume_path(out),req_.url,total,rm);
+    if(!resumable&&std::filesystem::exists(out)){for(int i=1;;++i){auto stem=out.stem().wstring(),ext=out.extension().wstring();auto candidate=req_.save_directory/(stem+L" ("+std::to_wstring(i)+L")"+ext);if(!std::filesystem::exists(candidate)){out=candidate;break;}ResumeMap x;if(load_resume(resume_path(candidate),req_.url,total,x)){out=candidate;resumable=true;break;}}}
+    if(!resumable&&!has_disk_space(out,total)){fail("Not enough free disk space for this download");return false;}{std::lock_guard lk(m_);s_.filename=U8(out.filename().wstring());s_.total_bytes=total;s_.output_path=out;}return true;}
+
+void DownloadTask::update_speed(){auto now=std::chrono::steady_clock::now();auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(now-speed_last_time_).count();if(ms<350)return;auto cur=downloaded_.load();double bps=(cur>=speed_last_bytes_?(cur-speed_last_bytes_):0)*1000.0/ms;{std::lock_guard lk(m_);s_.bytes_per_second=s_.bytes_per_second<=0?bps:(s_.bytes_per_second*0.72+bps*0.28);}speed_last_bytes_=cur;speed_last_time_=now;emit();}
+
+bool DownloadTask::segmented(){
+    auto snap=snapshot();auto rp=resume_path(snap.output_path);ResumeMap rm;bool resumed=load_resume(rp,req_.url,snap.total_bytes,rm);
+    if(!resumed){rm.total=snap.total_bytes;rm.segment=kResumeSegment;rm.url=req_.url;rm.done.assign((std::size_t)((rm.total+rm.segment-1)/rm.segment),0);HANDLE init=CreateFileW(snap.output_path.c_str(),GENERIC_WRITE|GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(init==INVALID_HANDLE_VALUE){fail("Cannot create output file");return false;}LARGE_INTEGER sz{};sz.QuadPart=(LONGLONG)snap.total_bytes;if(!SetFilePointerEx(init,sz,nullptr,FILE_BEGIN)||!SetEndOfFile(init)){CloseHandle(init);fail("Cannot allocate output file; check disk space/filesystem");return false;}CloseHandle(init);if(!save_resume(rp,rm)){fail("Cannot create AIRI resume metadata");return false;}}
+    else {HANDLE init=CreateFileW(snap.output_path.c_str(),GENERIC_WRITE|GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(init==INVALID_HANDLE_VALUE){fail("Cannot reopen partial output file");return false;}LARGE_INTEGER sz{};sz.QuadPart=(LONGLONG)snap.total_bytes;SetFilePointerEx(init,sz,nullptr,FILE_BEGIN);SetEndOfFile(init);CloseHandle(init);}
+    std::uint64_t restored=0;for(std::size_t i=0;i<rm.done.size();++i)if(rm.done[i])restored+=segment_bytes(i,rm);downloaded_=restored;
+    std::atomic<std::size_t> nextIndex{0};int workers=std::clamp(req_.connections,1,64);if(snap.total_bytes>=4ull*1024*1024*1024)workers=std::min(workers,16);std::mutex mapMtx,failedMtx;std::vector<std::size_t> failed;
+    auto transfer=[&](HANDLE f,std::uint64_t begin,std::uint64_t end,int maxAttempts)->bool{std::vector<char>buf(512*1024);std::uint64_t off=begin;int attempt=0;while(off<=end&&!cancelled_){while(paused_&&!cancelled_)Sleep(40);if(cancelled_)return false;Handles h;bool ok=open_req(req_,L"GET",h,std::to_wstring(off)+L"-"+std::to_wstring(end));DWORD st=ok?status(h.request):0;std::uint64_t rb=0,re=0,rt=0;bool cr=ok&&content_range(h.request,rb,re,rt);if(!ok||st!=206||!cr||rb!=off||rt!=snap.total_bytes){if(++attempt>=maxAttempts)return false;retry_sleep(attempt);continue;}bool readFailed=false;while(off<=end&&!cancelled_){while(paused_&&!cancelled_)Sleep(40);DWORD avail=0;if(!WinHttpQueryDataAvailable(h.request,&avail)){readFailed=true;break;}if(!avail){if(off<=end)readFailed=true;break;}DWORD want=(DWORD)std::min<std::uint64_t>({(std::uint64_t)buf.size(),(std::uint64_t)avail,end-off+1});DWORD got=0;if(!WinHttpReadData(h.request,buf.data(),want,&got)||!got){readFailed=true;break;}OVERLAPPED ov{};ov.Offset=(DWORD)(off&0xffffffffu);ov.OffsetHigh=(DWORD)(off>>32);DWORD wrote=0;if(!WriteFile(f,buf.data(),got,&wrote,&ov)||wrote!=got)return false;off+=got;downloaded_+=got;update_speed();}if(off>end)return true;if(readFailed){if(++attempt>=maxAttempts)return false;retry_sleep(attempt);}}
+        return off>end;};
+    std::vector<std::thread>ts;for(int k=0;k<workers;++k)ts.emplace_back([&,this]{HANDLE f=CreateFileW(snap.output_path.c_str(),GENERIC_WRITE|GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE)return;for(;;){if(cancelled_)break;auto i=nextIndex.fetch_add(1);if(i>=rm.done.size())break;{std::lock_guard lk(mapMtx);if(rm.done[i])continue;}auto begin=(std::uint64_t)i*rm.segment;auto end=std::min<std::uint64_t>(rm.total-1,begin+rm.segment-1);if(transfer(f,begin,end,6)){std::lock_guard lk(mapMtx);rm.done[i]=1;save_resume(rp,rm);}else if(!cancelled_){std::lock_guard lk(failedMtx);failed.push_back(i);}}CloseHandle(f);});
+    for(auto&t:ts)t.join();if(cancelled_)return false;
+    if(!failed.empty()){HANDLE f=CreateFileW(snap.output_path.c_str(),GENERIC_WRITE|GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE){fail("Resume recovery could not reopen partial file");return false;}for(auto i:failed){auto begin=(std::uint64_t)i*rm.segment;auto end=std::min<std::uint64_t>(rm.total-1,begin+rm.segment-1);downloaded_-=std::min<std::uint64_t>(downloaded_.load(),0);if(!transfer(f,begin,end,10)){CloseHandle(f);fail("Network unstable after retries. Partial file kept; press Resume to continue later.");return false;}std::lock_guard lk(mapMtx);rm.done[i]=1;save_resume(rp,rm);}CloseHandle(f);}
+    for(auto d:rm.done)if(!d){fail("Download incomplete. Partial file kept; press Resume to continue.");return false;}
+    DeleteFileW(rp.c_str());downloaded_=snap.total_bytes;return true;
+}
+
+bool DownloadTask::sequential(){auto snap=snapshot();for(int attempt=0;attempt<4&&!cancelled_;++attempt){if(attempt){retry_sleep(attempt);downloaded_=0;speed_last_bytes_=0;}Handles h;if(!open_req(req_,L"GET",h)||status(h.request)>=400)continue;HANDLE f=CreateFileW(snap.output_path.c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE){fail("Cannot create output file");return false;}std::vector<char>buf(512*1024);bool failed=false;while(!cancelled_){while(paused_&&!cancelled_)Sleep(40);DWORD avail=0;if(!WinHttpQueryDataAvailable(h.request,&avail)){failed=true;break;}if(!avail)break;DWORD got=0;if(!WinHttpReadData(h.request,buf.data(),(DWORD)std::min<std::size_t>(buf.size(),avail),&got)||!got){failed=true;break;}DWORD wrote=0;if(!WriteFile(f,buf.data(),got,&wrote,nullptr)||wrote!=got){CloseHandle(f);fail("Disk write failed");return false;}downloaded_+=got;update_speed();}CloseHandle(f);if(cancelled_)return false;if(!failed&&downloaded_.load()==snap.total_bytes)return true;}fail("Sequential server does not support persistent range resume; retry will restart this file");return false;}
+
+DownloadManager::DownloadManager(Callback cb):cb_(std::move(cb)){}
+std::shared_ptr<DownloadTask>DownloadManager::add(DownloadRequest r){auto t=std::make_shared<DownloadTask>(next_++,std::move(r),cb_);{std::lock_guard lk(m_);tasks_.push_back(t);}t->start();return t;}
+std::vector<DownloadSnapshot>DownloadManager::snapshots()const{std::lock_guard lk(m_);std::vector<DownloadSnapshot>v;for(auto&t:tasks_)v.push_back(t->snapshot());return v;}
+std::shared_ptr<DownloadTask>DownloadManager::find(std::uint64_t id)const{std::lock_guard lk(m_);for(auto&t:tasks_)if(t->snapshot().id==id)return t;return{};}
+}
+#endif
