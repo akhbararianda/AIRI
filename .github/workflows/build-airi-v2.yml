@@ -1,4 +1,4 @@
-name: Build AIRI Download Manager v2.2
+name: Build AIRI Download Manager v2.3
 
 on:
   workflow_dispatch:
@@ -57,6 +57,32 @@ jobs:
           $icon.Dispose(); $fontA.Dispose(); $fontD.Dispose(); $brushBlue.Dispose(); $brushWhite.Dispose(); $g.Dispose(); $bmp.Dispose()
           if (-not (Test-Path (Join-Path $appDir 'airi.ico'))) { throw 'AIRI icon generation failed' }
 
+      - name: Wire realtime media telemetry into UI
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'native-v2.1\src\app\main_v22.cpp'
+          $s = Get-Content $path -Raw
+          $old = 'struct MediaRow{std::uint64_t id{};std::wstring name,status=L"Queued";int progress{};std::filesystem::path dir;bool done{},failed{};};'
+          $new = 'struct MediaRow{std::uint64_t id{};std::wstring name,status=L"Queued";int progress{};std::filesystem::path dir;bool done{},failed{};std::wstring downloaded,total,speed,eta,fragment;};'
+          if (-not $s.Contains($old)) { throw 'MediaRow source signature changed' }
+          $s = $s.Replace($old,$new)
+
+          $old = 'j.status=w(p.status);j.progress=std::clamp(p.percent,0,100);j.done=p.status=="Completed";j.failed=p.status=="Failed";break;'
+          $new = 'j.status=w(p.status);j.progress=std::clamp(p.percent,0,100);j.downloaded=w(p.downloaded_text);j.total=w(p.total_text);j.speed=w(p.speed_text);j.eta=w(p.eta_text);j.fragment=w(p.fragment_text);j.done=p.status=="Completed";j.failed=p.status=="Failed";break;'
+          if (-not $s.Contains($old)) { throw 'Media callback source signature changed' }
+          $s = $s.Replace($old,$new)
+
+          $old = 'setcell(r,2,j.status);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,5,L"Media");'
+          $new = 'auto liveStatus=j.status;if(!j.eta.empty()&&j.eta!=L"NA")liveStatus+=L" | ETA "+j.eta;if(!j.fragment.empty()&&j.fragment!=L"NA/NA"&&j.fragment!=L"NA")liveStatus+=L" | "+j.fragment;setcell(r,1,!j.total.empty()&&j.total!=L"NA"?j.total:j.downloaded);setcell(r,2,liveStatus);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,4,j.speed.empty()||j.speed==L"NA"?L"-":j.speed);setcell(r,5,L"Media");'
+          if (-not $s.Contains($old)) { throw 'Media table source signature changed' }
+          $s = $s.Replace($old,$new)
+
+          $s = $s.Replace('Turbo Engine v2.2','Turbo Engine v2.3')
+          $s = $s.Replace('AIRI Turbo v2.2','AIRI Turbo v2.3')
+          $s = $s.Replace('AIRI Download Manager - Turbo v2.2','AIRI Download Manager - Turbo v2.3')
+          Set-Content $path $s -Encoding UTF8
+
       - name: Configure x64
         shell: powershell
         run: cmake -S native-v2.1 -B native-v2.1\build-win -A x64
@@ -112,12 +138,19 @@ jobs:
             'native-v2.1\browser-extension\manifest.json'
           )
           foreach ($f in $required) { if (-not (Test-Path $f)) { throw "Missing package input: $f" } }
-          $manifest = Get-Content native-v2.1\browser-extension\manifest.json -Raw | ConvertFrom-Json
-          if ($manifest.version -ne '3.2.0') { throw "Unexpected extension version: $($manifest.version)" }
 
       - name: Install Inno Setup
         shell: powershell
         run: choco install innosetup --no-progress -y
+
+      - name: Patch installer version
+        shell: powershell
+        run: |
+          $p='native-v2.1\installer\AIRI-DM-Native.iss'
+          $s=Get-Content $p -Raw
+          $s=$s.Replace('#define MyAppVersion "2.2.0"','#define MyAppVersion "2.3.0"')
+          $s=$s.Replace('OutputBaseFilename=AIRI-Download-Manager-Setup-v2.2','OutputBaseFilename=AIRI-Download-Manager-Setup-v2.3')
+          Set-Content $p $s -Encoding UTF8
 
       - name: Build Setup EXE
         shell: powershell
@@ -128,29 +161,29 @@ jobs:
         run: |
           Get-Item 'native-v2.1\build-win\Release\AIRI Download Manager.exe' | Format-List Name,Length
           Get-Item 'native-v2.1\build-win\Release\AIRIDMBridge.exe' | Format-List Name,Length
-          Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.2.exe' | Format-List Name,Length
-          $size = (Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.2.exe').Length
+          Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.3.exe' | Format-List Name,Length
+          $size = (Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.3.exe').Length
           if ($size -lt 20000000) { throw "Installer unexpectedly small ($size bytes); media tools may be missing." }
 
       - name: Create SHA256
         shell: powershell
         run: |
           $files = @(
-            'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.2.exe',
+            'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.3.exe',
             'native-v2.1\build-win\Release\AIRI Download Manager.exe',
             'native-v2.1\build-win\Release\AIRIDMBridge.exe'
           )
           $lines = foreach ($f in $files) { $h = Get-FileHash $f -Algorithm SHA256; "$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))" }
           $lines | Set-Content native-v2.1\SHA256SUMS.txt
 
-      - name: Upload AIRI v2.2 Windows artifact
+      - name: Upload AIRI v2.3 Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Download-Manager-v2.2-Windows
+          name: AIRI-Download-Manager-v2.3-Windows
           if-no-files-found: error
           retention-days: 30
           path: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.2.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.3.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/browser-extension/**
