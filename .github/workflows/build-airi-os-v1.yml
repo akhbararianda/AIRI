@@ -6,6 +6,12 @@ on:
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
+  pull_request:
+    branches: [airi-os-v19-fusion-launcher]
+    paths:
+      - 'airi-os/**'
+      - '.github/workflows/build-airi-os-v1.yml'
+      - 'airi-os-build-trigger.txt'
   workflow_dispatch:
 
 permissions:
