@@ -1,4 +1,4 @@
-name: Build AIRI License Manager Admin
+name: Build AIRI License Manager Admin v1.1
 
 on:
   workflow_dispatch:
@@ -29,11 +29,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r commercial-tools\requirements-admin.txt
 
-      - name: Validate source imports
+      - name: Validate admin source
         shell: powershell
         run: |
           python -m py_compile commercial-tools\airi_license_manager.py
           python -m py_compile commercial-tools\generate_license.py
+          $s=Get-Content 'commercial-tools\airi_license_manager.py' -Raw
+          if(-not $s.Contains('Admin Edition v1.1')){throw 'Admin source is not v1.1'}
+          if(-not $s.Contains('licenses.db')){throw 'SQLite license database missing'}
+          if(-not $s.Contains('Export CSV')){throw 'History export feature missing'}
+          if(-not $s.Contains('EXPECTED_PUBLIC_FINGERPRINT')){throw 'Signing key fingerprint guard missing'}
 
       - name: Generate AIRI admin icon
         shell: powershell
@@ -70,15 +75,15 @@ jobs:
             --clean `
             --onefile `
             --windowed `
-            --name "AIRI-License-Manager-Admin-v1.0" `
+            --name "AIRI-License-Manager-Admin-v1.1" `
             --icon "commercial-tools\airi-license-manager.ico" `
             commercial-tools\airi_license_manager.py
 
       - name: Verify admin binary
         shell: powershell
         run: |
-          $exe='dist\AIRI-License-Manager-Admin-v1.0.exe'
-          if(-not(Test-Path $exe)){throw 'AIRI License Manager EXE missing'}
+          $exe='dist\AIRI-License-Manager-Admin-v1.1.exe'
+          if(-not(Test-Path $exe)){throw 'AIRI License Manager v1.1 EXE missing'}
           $size=(Get-Item $exe).Length
           if($size -lt 5000000){throw "Admin EXE unexpectedly small: $size bytes"}
           Get-Item $exe | Format-List Name,Length
@@ -86,27 +91,33 @@ jobs:
       - name: Create admin SHA256
         shell: powershell
         run: |
-          $h=Get-FileHash 'dist\AIRI-License-Manager-Admin-v1.0.exe' -Algorithm SHA256
-          "$($h.Hash.ToLower())  AIRI-License-Manager-Admin-v1.0.exe" | Set-Content dist\SHA256SUMS-AIRI-License-Manager.txt
+          $h=Get-FileHash 'dist\AIRI-License-Manager-Admin-v1.1.exe' -Algorithm SHA256
+          "$($h.Hash.ToLower())  AIRI-License-Manager-Admin-v1.1.exe" | Set-Content dist\SHA256SUMS-AIRI-License-Manager.txt
 
       - name: Upload AIRI License Manager artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-License-Manager-Admin-v1.0-Windows
+          name: AIRI-License-Manager-Admin-v1.1-Windows
           retention-days: 30
           if-no-files-found: error
           path: |
-            dist/AIRI-License-Manager-Admin-v1.0.exe
+            dist/AIRI-License-Manager-Admin-v1.1.exe
             dist/SHA256SUMS-AIRI-License-Manager.txt
 
       - name: Publish AIRI License Manager release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: airi-license-manager-v1.0.0
-          name: AIRI License Manager — Admin Edition v1.0
+          tag_name: airi-license-manager-v1.1.0
+          name: AIRI License Manager — Admin Edition v1.1
           prerelease: true
           body: |
-            Private administration utility for AIRI Technology to issue signed AIRI Download Manager licenses from a buyer Machine ID. The private RSA signing key is intentionally NOT bundled or published. Developed by AIRI Technology. Founder: Akhbar Arianda.
+            AIRI Technology internal license administration utility.
+
+            v1.1 adds a local SQLite customer/license database, searchable license history, Copy License Key from history, Load Customer for renewals/reissue, CSV export, and automatic migration of legacy JSON history.
+
+            The AIRI private RSA signing key is intentionally NOT bundled or published. The admin app validates the expected public-key fingerprint before issuing a license.
+
+            Developed by AIRI Technology. Founder: Akhbar Arianda.
           files: |
-            dist/AIRI-License-Manager-Admin-v1.0.exe
+            dist/AIRI-License-Manager-Admin-v1.1.exe
             dist/SHA256SUMS-AIRI-License-Manager.txt
