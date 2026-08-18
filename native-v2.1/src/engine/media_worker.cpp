@@ -14,14 +14,79 @@ std::wstring fmt(const std::string&q,bool ff){if(q=="audio")return L"ba/b";auto 
 std::wstring clean(std::wstring v){v.erase(std::remove(v.begin(),v.end(),L'\r'),v.end());v.erase(std::remove(v.begin(),v.end(),L'\n'),v.end());std::wstring o;for(auto c:v){if(c==L'\"')o+=L"\\\"";else o+=c;}return o;}
 std::vector<std::string> split(const std::string&s,char d){std::vector<std::string>v;std::size_t p=0;for(;;){auto q=s.find(d,p);v.push_back(s.substr(p,q==std::string::npos?s.size()-p:q-p));if(q==std::string::npos)break;p=q+1;}return v;}
 std::string trim(std::string s){auto bad=[](unsigned char c){return c==' '||c=='\t'||c=='\r'||c=='\n';};while(!s.empty()&&bad((unsigned char)s.front()))s.erase(s.begin());while(!s.empty()&&bad((unsigned char)s.back()))s.pop_back();return s;}
+std::string after(const std::string&s,const std::string&prefix){return s.rfind(prefix,0)==0?trim(s.substr(prefix.size())):std::string{};}
 }
 std::filesystem::path MediaWorker::tools_directory(){return appdir()/L"tools";}
 std::filesystem::path MediaWorker::tool_path(){return tools_directory()/L"yt-dlp.exe";}
 bool MediaWorker::available(){return std::filesystem::exists(tool_path());}
-bool MediaWorker::download(const MediaRequest&r,Callback cb){auto tools=tools_directory(),yt=tool_path(),ff=tools/L"ffmpeg.exe",deno=tools/L"deno.exe";if(!std::filesystem::exists(yt)){if(cb)cb({0,"Failed","AIRI media engine is missing."});return false;}bool hasff=std::filesystem::exists(ff),hasdeno=std::filesystem::exists(deno);std::error_code ec;std::filesystem::create_directories(r.save_directory,ec);
-std::wstring templ=L"download:AIRI|%(progress._percent_str)s|%(progress._downloaded_bytes_str)s|%(progress._total_bytes_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.fragment_index)s/%(progress.fragment_count)s";
-std::wstring cmd=Q(yt)+L" --ignore-config --newline --no-playlist --windows-filenames --no-color --progress-template "+Q(templ)+L" --output \"%(title).180B [%(id)s].%(ext)s\" -P "+Q(r.save_directory.wstring())+L" -f "+Q(fmt(r.quality,hasff));if(hasdeno)cmd+=L" --js-runtimes "+Q(L"deno:"+deno.wstring());if(hasff)cmd+=L" --ffmpeg-location "+Q(tools.wstring())+L" --merge-output-format mp4";if(!r.user_agent.empty())cmd+=L" --user-agent "+Q(clean(W(r.user_agent)));if(!r.referer.empty())cmd+=L" --referer "+Q(clean(W(r.referer)));if(!r.cookie.empty())cmd+=L" --add-headers "+Q(L"Cookie:"+clean(W(r.cookie)));cmd+=L" "+Q(W(r.page_url));
-SECURITY_ATTRIBUTES sa{sizeof(sa),nullptr,TRUE};HANDLE rd{},wr{};if(!CreatePipe(&rd,&wr,&sa,0)){if(cb)cb({0,"Failed","Could not create media pipe."});return false;}SetHandleInformation(rd,HANDLE_FLAG_INHERIT,0);STARTUPINFOW si{};si.cb=sizeof(si);si.dwFlags=STARTF_USESTDHANDLES|STARTF_USESHOWWINDOW;si.wShowWindow=SW_HIDE;si.hStdOutput=wr;si.hStdError=wr;si.hStdInput=GetStdHandle(STD_INPUT_HANDLE);PROCESS_INFORMATION pi{};std::vector<wchar_t>mutableCmd(cmd.begin(),cmd.end());mutableCmd.push_back(L'\0');BOOL ok=CreateProcessW(yt.c_str(),mutableCmd.data(),nullptr,nullptr,TRUE,CREATE_NO_WINDOW|CREATE_UNICODE_ENVIRONMENT,nullptr,tools.c_str(),&si,&pi);CloseHandle(wr);if(!ok){CloseHandle(rd);if(cb)cb({0,"Failed","Could not start media engine."});return false;}if(cb)cb({0,"Preparing","AIRI media engine started silently."});std::string pending,last;std::array<char,4096>b{};for(;;){DWORD avail=0;if(!PeekNamedPipe(rd,nullptr,0,nullptr,&avail,nullptr))break;if(avail){DWORD got=0;if(!ReadFile(rd,b.data(),(DWORD)std::min<std::size_t>(b.size(),avail),&got,nullptr)||!got)break;pending.append(b.data(),got);std::size_t p;while((p=pending.find_first_of("\r\n"))!=std::string::npos){auto line=pending.substr(0,p);pending.erase(0,p+1);if(line.empty())continue;last=line;if(line.rfind("AIRI|",0)==0){auto f=split(line,'|');MediaProgress mp;mp.status="Downloading";mp.detail=line;if(f.size()>1){auto pct=trim(f[1]);pct.erase(std::remove(pct.begin(),pct.end(),'%'),pct.end());try{mp.percent=(int)std::stod(pct);}catch(...){}}if(f.size()>2)mp.downloaded_text=trim(f[2]);if(f.size()>3)mp.total_text=trim(f[3]);if(f.size()>4)mp.speed_text=trim(f[4]);if(f.size()>5)mp.eta_text=trim(f[5]);if(f.size()>6)mp.fragment_text=trim(f[6]);if(cb)cb(mp);}else if(line.find("[Merger]")!=std::string::npos||line.find("[ffmpeg]")!=std::string::npos||line.find("Merging formats")!=std::string::npos){if(cb)cb({99,"Merging",line});}else if(line.find("ERROR:")!=std::string::npos){if(cb)cb({0,"Failed",line});}else if(line.find("[download] Destination:")!=std::string::npos){if(cb)cb({0,"Starting",line});}else if(cb)cb({0,"Working",line});}}
-auto wait=WaitForSingleObject(pi.hProcess,avail?0:100);if(wait==WAIT_OBJECT_0&&!avail)break;}DWORD code=1;GetExitCodeProcess(pi.hProcess,&code);CloseHandle(rd);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);if(cb)cb({code?0:100,code?"Failed":"Completed",code?(last.empty()?"Media engine failed.":last):"Media download completed."});return code==0;}
+bool MediaWorker::download(const MediaRequest&r,Callback cb){
+    auto tools=tools_directory(),yt=tool_path(),ff=tools/L"ffmpeg.exe",deno=tools/L"deno.exe";
+    if(!std::filesystem::exists(yt)){if(cb)cb({-1,"Failed","AIRI media engine is missing."});return false;}
+    bool hasff=std::filesystem::exists(ff),hasdeno=std::filesystem::exists(deno);
+    std::error_code ec;std::filesystem::create_directories(r.save_directory,ec);
+    std::wstring templ=L"download:AIRI|%(progress._percent_str)s|%(progress._downloaded_bytes_str)s|%(progress._total_bytes_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(progress.fragment_index)s/%(progress.fragment_count)s";
+    std::wstring finalPrint=L"after_move:AIRI_FILE|%(filepath)s";
+    std::wstring cmd=Q(yt)+L" --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist --windows-filenames --no-color --progress-template "+Q(templ)+L" --print "+Q(finalPrint)+L" --output \"%(title).180B [%(id)s].%(ext)s\" -P "+Q(r.save_directory.wstring())+L" -f "+Q(fmt(r.quality,hasff));
+    if(hasdeno)cmd+=L" --js-runtimes "+Q(L"deno:"+deno.wstring());
+    if(hasff)cmd+=L" --ffmpeg-location "+Q(tools.wstring())+L" --merge-output-format mp4";
+    if(!r.user_agent.empty())cmd+=L" --user-agent "+Q(clean(W(r.user_agent)));
+    if(!r.referer.empty())cmd+=L" --referer "+Q(clean(W(r.referer)));
+    if(!r.cookie.empty())cmd+=L" --add-headers "+Q(L"Cookie:"+clean(W(r.cookie)));
+    cmd+=L" "+Q(W(r.page_url));
+
+    SECURITY_ATTRIBUTES sa{sizeof(sa),nullptr,TRUE};HANDLE rd{},wr{};
+    if(!CreatePipe(&rd,&wr,&sa,0)){if(cb)cb({-1,"Failed","Could not create media pipe."});return false;}
+    SetHandleInformation(rd,HANDLE_FLAG_INHERIT,0);
+    STARTUPINFOW si{};si.cb=sizeof(si);si.dwFlags=STARTF_USESTDHANDLES|STARTF_USESHOWWINDOW;si.wShowWindow=SW_HIDE;si.hStdOutput=wr;si.hStdError=wr;si.hStdInput=GetStdHandle(STD_INPUT_HANDLE);
+    PROCESS_INFORMATION pi{};std::vector<wchar_t>mutableCmd(cmd.begin(),cmd.end());mutableCmd.push_back(L'\0');
+    BOOL ok=CreateProcessW(yt.c_str(),mutableCmd.data(),nullptr,nullptr,TRUE,CREATE_NO_WINDOW|CREATE_UNICODE_ENVIRONMENT,nullptr,tools.c_str(),&si,&pi);
+    CloseHandle(wr);
+    if(!ok){CloseHandle(rd);if(cb)cb({-1,"Failed","Could not start media engine."});return false;}
+
+    HANDLE job=CreateJobObjectW(nullptr,nullptr);
+    if(job){JOBOBJECT_EXTENDED_LIMIT_INFORMATION ji{};ji.BasicLimitInformation.LimitFlags=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;SetInformationJobObject(job,JobObjectExtendedLimitInformation,&ji,sizeof(ji));AssignProcessToJobObject(job,pi.hProcess);}
+    if(cb)cb({-1,"Preparing","AIRI media engine started silently."});
+
+    bool cancelled=false;
+    std::string pending,last,finalPath;
+    std::array<char,4096>b{};
+    for(;;){
+        if(r.cancel_requested&&r.cancel_requested->load()){
+            cancelled=true;
+            if(job)TerminateJobObject(job,ERROR_CANCELLED);else TerminateProcess(pi.hProcess,ERROR_CANCELLED);
+            break;
+        }
+        DWORD avail=0;if(!PeekNamedPipe(rd,nullptr,0,nullptr,&avail,nullptr))break;
+        if(avail){
+            DWORD got=0;if(!ReadFile(rd,b.data(),(DWORD)std::min<std::size_t>(b.size(),avail),&got,nullptr)||!got)break;
+            pending.append(b.data(),got);std::size_t p;
+            while((p=pending.find_first_of("\r\n"))!=std::string::npos){
+                auto line=pending.substr(0,p);pending.erase(0,p+1);if(line.empty())continue;last=line;
+                if(line.rfind("AIRI|",0)==0){
+                    auto f=split(line,'|');MediaProgress mp;mp.status="Downloading";mp.detail=line;
+                    if(f.size()>1){auto pct=trim(f[1]);pct.erase(std::remove(pct.begin(),pct.end(),'%'),pct.end());try{mp.percent=(int)std::stod(pct);}catch(...){mp.percent=-1;}}
+                    if(f.size()>2)mp.downloaded_text=trim(f[2]);if(f.size()>3)mp.total_text=trim(f[3]);if(f.size()>4)mp.speed_text=trim(f[4]);if(f.size()>5)mp.eta_text=trim(f[5]);if(f.size()>6)mp.fragment_text=trim(f[6]);
+                    if(cb)cb(mp);
+                }else if(line.rfind("AIRI_FILE|",0)==0){
+                    finalPath=after(line,"AIRI_FILE|");MediaProgress mp;mp.status="Finalizing";mp.detail=line;mp.output_path=finalPath;if(cb)cb(mp);
+                }else if(line.find("[Merger]")!=std::string::npos||line.find("[ffmpeg]")!=std::string::npos||line.find("Merging formats")!=std::string::npos){
+                    MediaProgress mp;mp.percent=99;mp.status="Merging";mp.detail=line;if(cb)cb(mp);
+                }else if(line.find("ERROR:")!=std::string::npos){
+                    MediaProgress mp;mp.status="Failed";mp.detail=line;if(cb)cb(mp);
+                }else if(line.rfind("[download] Destination: ",0)==0){
+                    MediaProgress mp;mp.status="Starting";mp.detail=line;mp.output_path=after(line,"[download] Destination: ");if(cb)cb(mp);
+                }
+            }
+        }
+        auto wait=WaitForSingleObject(pi.hProcess,avail?0:100);if(wait==WAIT_OBJECT_0&&!avail)break;
+    }
+
+    if(cancelled)WaitForSingleObject(pi.hProcess,3000);
+    DWORD code=1;GetExitCodeProcess(pi.hProcess,&code);
+    CloseHandle(rd);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);if(job)CloseHandle(job);
+    if(cancelled){MediaProgress mp;mp.status="Cancelled";mp.detail="Media download cancelled.";mp.output_path=finalPath;if(cb)cb(mp);return false;}
+    MediaProgress mp;mp.percent=code? -1:100;mp.status=code?"Failed":"Completed";mp.detail=code?(last.empty()?"Media engine failed.":last):"Media download completed.";mp.output_path=finalPath;if(cb)cb(mp);
+    return code==0;
+}
 }
 #endif
