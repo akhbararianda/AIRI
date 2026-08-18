@@ -9,18 +9,23 @@ function airi_env(string $name, ?string $default = null): ?string {
 function airi_config(): array {
     static $cfg;
     if ($cfg !== null) return $cfg;
-    $cfg = [
+    $base = [
         'dsn' => airi_env('AIRI_DB_DSN', 'mysql:host=127.0.0.1;dbname=airi_license;charset=utf8mb4'),
         'db_user' => airi_env('AIRI_DB_USER', 'airi_license'),
         'db_pass' => airi_env('AIRI_DB_PASS', ''),
         'app_secret' => airi_env('AIRI_APP_SECRET', ''),
         'admin_user' => airi_env('AIRI_ADMIN_USER', 'admin'),
         'admin_password_hash' => airi_env('AIRI_ADMIN_PASSWORD_HASH', ''),
-        'public_key' => dirname(__DIR__) . '/keys/airi-license-public.pem',
-        'base_url' => rtrim((string)airi_env('AIRI_BASE_URL', ''), '/'),
+        'base_url' => airi_env('AIRI_BASE_URL', ''),
     ];
+    $localPath = dirname(__DIR__) . '/config.php';
+    $local = is_file($localPath) ? require $localPath : [];
+    if (!is_array($local)) $local = [];
+    $cfg = array_replace($base, $local);
+    $cfg['public_key'] = dirname(__DIR__) . '/keys/airi-license-public.pem';
+    $cfg['base_url'] = rtrim((string)($cfg['base_url'] ?? ''), '/');
     if (strlen((string)$cfg['app_secret']) < 32) {
-        throw new RuntimeException('AIRI_APP_SECRET must be at least 32 characters.');
+        throw new RuntimeException('AIRI_APP_SECRET/app_secret must be at least 32 characters.');
     }
     return $cfg;
 }
