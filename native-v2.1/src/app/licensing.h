@@ -15,6 +15,7 @@ Info current();
 bool can_download();
 bool activate(const std::string& license_key, std::string& error);
 std::string machine_id();
+std::string stored_license_key();
 const char* state_name(State s);
 }
 #endif
