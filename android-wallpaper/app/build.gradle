@@ -26,3 +26,5 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+// AIRI Wallpaper v2.0: 2,000 procedural offline wallpapers
