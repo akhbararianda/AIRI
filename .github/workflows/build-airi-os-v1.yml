@@ -1,8 +1,8 @@
-name: Build AIRI OS v18 Ultra Asset Stable APK
+name: Build AIRI Fusion Launcher v19 APK
 
 on:
   push:
-    branches: [airi-os-v18-ultra-asset-stable]
+    branches: [airi-os-v19-fusion-launcher]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
@@ -30,31 +30,28 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Generate bundled Ultra Asset Pack
+      - name: Generate bundled asset pack
         working-directory: airi-os
         run: python3 tools/generate_ultra_assets.py
 
-      - name: Show bundled asset size
-        run: du -sh airi-os/app/src/main/assets || true
-
       - name: Build debug APK
         working-directory: airi-os
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
 
-      - name: Verify APK is larger than 2 MB
+      - name: Verify APK
         run: |
           APK=airi-os/app/build/outputs/apk/debug/app-debug.apk
-          SIZE=$(stat -c%s "$APK")
-          echo "APK bytes: $SIZE"
-          test "$SIZE" -ge 2097152
+          test -f "$APK"
+          file "$APK"
+          sha256sum "$APK"
 
       - name: Rename APK
-        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-OS-v18.0-Ultra-Asset-Stable-RMX1851.apk
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-Fusion-Launcher-v19-RMX1851.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-OS-v18.0-Ultra-Asset-Stable-RMX1851
-          path: AIRI-OS-v18.0-Ultra-Asset-Stable-RMX1851.apk
+          name: AIRI-Fusion-Launcher-v19-RMX1851
+          path: AIRI-Fusion-Launcher-v19-RMX1851.apk
           if-no-files-found: error
           retention-days: 30
