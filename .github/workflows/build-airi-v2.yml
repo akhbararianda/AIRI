@@ -1,4 +1,4 @@
-name: Build AIRI Download Manager v2.6 AIRI Edition
+name: Build AIRI Download Manager v2.6.1 AIRI Stable
 
 on:
   workflow_dispatch:
@@ -55,39 +55,22 @@ jobs:
           }
           $icon.Dispose();$fontA.Dispose();$fontD.Dispose();$brushBlue.Dispose();$brushWhite.Dispose();$g.Dispose();$bmp.Dispose()
 
-      - name: Patch AIRI v2.6 product identity
+      - name: Verify AIRI v2.6.1 product sources
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $p='native-v2.1\src\app\main_v25_modern.cpp'
-          $s=Get-Content $p -Raw
-          $s=$s.Replace('Smart Turbo + Universal Media Center  •  v2.5 Modern','Smart Turbo + Universal Media Center  •  v2.6 AIRI Edition')
-          $s=$s.Replace('AIRI Turbo  •  ','AIRI Technology  •  Founder Akhbar Arianda  •  ')
-          $s=$s.Replace('AIRI Download Manager v2.5 Modern','AIRI Download Manager v2.6 AIRI Edition')
-          Set-Content $p $s -Encoding UTF8
-
-      - name: Tune media telemetry
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $p='native-v2.1\src\engine\media_worker.cpp'
-          $s=Get-Content $p -Raw
-          $needle=' --ignore-config --newline --no-playlist'
-          if($s.Contains($needle)){$s=$s.Replace($needle,' --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist')}
-          Set-Content $p $s -Encoding UTF8
-
-      - name: Verify v2.6 AIRI sources
-        shell: powershell
-        run: |
-          if(-not(Test-Path 'native-v2.1\src\app\main_v26_airi.cpp')){throw 'AIRI v2.6 themed shell missing'}
           $cm=Get-Content 'native-v2.1\CMakeLists.txt' -Raw
-          if(-not $cm.Contains('main_v26_airi.cpp')){throw 'CMake is not using AIRI v2.6 shell'}
+          if(-not $cm.Contains('VERSION 2.6.1')){throw 'CMake version is not 2.6.1'}
+          if(-not $cm.Contains('licensing.cpp')){throw 'Licensing module is not compiled'}
+          if(-not(Test-Path 'native-v2.1\src\app\licensing.cpp')){throw 'Licensing implementation missing'}
+          if(-not(Test-Path 'native-v2.1\tests\license_tests.cpp')){throw 'License tests missing'}
+          if(-not(Test-Path 'native-v2.1\src\app\main_v26_airi.cpp')){throw 'AIRI themed shell missing'}
           $iss=Get-Content 'native-v2.1\installer\AIRI-DM-Native.iss' -Raw
-          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.6')){throw 'Installer is not v2.6'}
-          if(-not $iss.Contains('AIRI Technology')){throw 'Publisher identity missing'}
+          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.6.1')){throw 'Installer output is not v2.6.1'}
+          if(-not $iss.Contains('AIRI Technology')){throw 'AIRI Technology publisher metadata missing'}
           $m=Get-Content 'native-v2.1\browser-extension\manifest.json' -Raw | ConvertFrom-Json
-          if($m.version -ne '3.4.0'){throw "Unexpected extension version $($m.version)"}
-          if(-not(Test-Path 'native-v2.1\browser-extension\universal-overlay.js')){throw 'Universal overlay missing'}
+          if(-not(Test-Path 'native-v2.1\browser-extension\universal-overlay.js')){throw 'Universal media overlay missing'}
+          Write-Host "Extension version: $($m.version)"
 
       - name: Configure x64
         shell: powershell
@@ -97,7 +80,7 @@ jobs:
         shell: powershell
         run: cmake --build native-v2.1\build-win --config Release --parallel
 
-      - name: Run core tests
+      - name: Run core and licensing tests
         shell: powershell
         run: ctest --test-dir native-v2.1\build-win -C Release --output-on-failure
 
@@ -117,6 +100,8 @@ jobs:
           $ffmpeg=Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse|Select-Object -First 1;$ffprobe=Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse|Select-Object -First 1
           if(-not $ffmpeg -or -not $ffprobe){throw 'FFmpeg tools missing'}
           Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force;Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
+          & $yt --version
+          & (Join-Path $tools 'deno.exe') --version
 
       - name: Install Inno Setup
         shell: powershell
@@ -126,45 +111,61 @@ jobs:
         shell: powershell
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" native-v2.1\installer\AIRI-DM-Native.iss'
 
-      - name: Verify package
+      - name: Verify public package
         shell: powershell
         run: |
-          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.exe'
+          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.1.exe'
           $app='native-v2.1\build-win\Release\AIRI Download Manager.exe'
           $bridge='native-v2.1\build-win\Release\AIRIDMBridge.exe'
           foreach($f in @($setup,$app,$bridge)){if(-not(Test-Path $f)){throw "Missing $f"}}
-          if((Get-Item $setup).Length -lt 20000000){throw 'Installer unexpectedly small'}
+          if((Get-Item $setup).Length -lt 20000000){throw 'Installer unexpectedly small; bundled media engine may be missing'}
+          Get-Item $setup,$app,$bridge | Format-Table Name,Length
 
-      - name: Create SHA256
+      - name: Create SHA256 manifest
         shell: powershell
         run: |
-          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
+          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.1.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
           $lines=foreach($f in $files){$h=Get-FileHash $f -Algorithm SHA256;"$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))"}
           $lines|Set-Content native-v2.1\SHA256SUMS.txt
+          Get-Content native-v2.1\SHA256SUMS.txt
 
-      - name: Upload AIRI v2.6 Windows artifact
+      - name: Upload AIRI v2.6.1 Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Download-Manager-v2.6-AIRI-Edition-Windows
+          name: AIRI-Download-Manager-v2.6.1-AIRI-Stable-Windows
           if-no-files-found: error
           retention-days: 30
           path: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.1.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/browser-extension/**
             native-v2.1/SHA256SUMS.txt
 
-      - name: Publish AIRI v2.6 release
+      - name: Publish AIRI v2.6.1 Stable release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.6.0-airi
-          name: AIRI Download Manager v2.6 AIRI Edition
+          tag_name: v2.6.1-airi-stable
+          name: AIRI Download Manager v2.6.1 AIRI Stable
           prerelease: true
           body: |
-            AIRI v2.6 introduces the AIRI visual identity across desktop and browser: warm cream surfaces, AIRI Blue controls, modern light cards, graphical progress, realtime telemetry and Universal Media Capture. Developed by AIRI Technology. Founder: Akhbar Arianda.
+            AIRI Download Manager v2.6.1 AIRI Stable.
+
+            Developed by AIRI Technology. Founder: Akhbar Arianda.
+
+            Highlights:
+            - AIRI cream + AIRI Blue visual identity.
+            - 14-day full-feature commercial trial and signed offline license activation.
+            - Repaired media Cancel with process-tree termination.
+            - Stable realtime progress/speed/ETA without telemetry reset.
+            - Tracks final media output so Open File works for media downloads.
+            - Correct Pause/Resume/Cancel button states.
+            - Universal Media Capture for ordinary HTTP/HTTPS media, with HLS/DASH extractor fallback.
+            - Product/publisher metadata and licensing smoke tests.
+
+            DRM-protected media is not bypassed. This prerelease should be field-tested before paid public launch.
           files: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.1.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/SHA256SUMS.txt
