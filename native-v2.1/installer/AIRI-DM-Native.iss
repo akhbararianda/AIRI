@@ -53,4 +53,4 @@ begin
  SaveStringToFile(ManifestPath,Json,False); RegWriteStringValue(HKCU,'Software\Google\Chrome\NativeMessagingHosts\'+NativeHost,'',ManifestPath); RegWriteStringValue(HKCU,'Software\Microsoft\Edge\NativeMessagingHosts\'+NativeHost,'',ManifestPath);
 end;
 procedure CurStepChanged(CurStep:TSetupStep); begin if CurStep=ssPostInstall then RegisterNativeHost; end;
-procedure CurUninstallStepChanged(CurUninstallStep:TUninstallStep); begin if CurUninstallStep=usUninstall then begin RegDeleteKeyIncludingSubkeys(HKCU,'Software\Google\Chrome\NativeMessagingHosts\'+NativeHost); RegDeleteKeyIncludingSubkeys(HKCU,'Software\Microsoft\Edge\\NativeMessagingHosts\'+NativeHost); end; end;
+procedure CurUninstallStepChanged(CurUninstallStep:TUninstallStep); begin if CurUninstallStep=usUninstall then begin RegDeleteKeyIncludingSubkeys(HKCU,'Software\Google\Chrome\NativeMessagingHosts\'+NativeHost); RegDeleteKeyIncludingSubkeys(HKCU,'Software\Microsoft\Edge\NativeMessagingHosts\'+NativeHost); end; end;
