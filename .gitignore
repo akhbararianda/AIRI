@@ -1,0 +1,15 @@
+# AIRI commercial signing secrets — never commit these
+*.pem
+*.pfx
+*.p12
+*.key
+commercial-tools/private/
+
+# Windows build outputs
+native-v2.1/build-win/
+native-v2.1/installer/Output/
+native-v2.1/third_party/tools/
+
+# Local tooling
+__pycache__/
+*.pyc
