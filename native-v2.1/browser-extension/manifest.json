@@ -1,12 +1,19 @@
 {
   "manifest_version": 3,
   "name": "AIRI Download Manager Integration",
-  "version": "3.2.0",
-  "description": "Native Windows integration for AIRI Download Manager v2.2 Turbo.",
-  "permissions": ["downloads", "nativeMessaging", "storage", "contextMenus", "cookies"],
+  "version": "3.4.0",
+  "description": "Universal media and download integration for AIRI Download Manager v2.4.",
+  "permissions": ["downloads", "nativeMessaging", "storage", "contextMenus", "cookies", "webRequest"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "service-worker.js"},
-  "content_scripts": [{"matches": ["https://www.youtube.com/*", "https://youtube.com/*"], "js": ["youtube-overlay.js"], "css": ["youtube-overlay.css"], "run_at": "document_idle"}],
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["universal-overlay.js"],
+    "css": ["universal-overlay.css"],
+    "run_at": "document_idle",
+    "all_frames": true,
+    "match_about_blank": true
+  }],
   "action": {
     "default_title": "AIRI Download Manager",
     "default_popup": "popup.html",
