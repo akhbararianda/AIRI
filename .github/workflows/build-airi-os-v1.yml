@@ -1,13 +1,13 @@
-name: Build AIRI Fusion Launcher v19 APK
+name: Build AIRI Ultimate Fusion v20 APK
 
 on:
   push:
-    branches: [airi-os-v19-fusion-launcher]
+    branches: [airi-os-v20-ultimate-fusion]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
   pull_request:
-    branches: [airi-os-v19-fusion-launcher]
+    branches: [airi-os-v20-ultimate-fusion]
     paths:
       - 'airi-os/**'
       - '.github/workflows/build-airi-os-v1.yml'
@@ -52,12 +52,12 @@ jobs:
           sha256sum "$APK"
 
       - name: Rename APK
-        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-Fusion-Launcher-v19-RMX1851.apk
+        run: cp airi-os/app/build/outputs/apk/debug/app-debug.apk AIRI-Ultimate-Fusion-v20-RMX1851.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Fusion-Launcher-v19-RMX1851
-          path: AIRI-Fusion-Launcher-v19-RMX1851.apk
+          name: AIRI-Ultimate-Fusion-v20-RMX1851
+          path: AIRI-Ultimate-Fusion-v20-RMX1851.apk
           if-no-files-found: error
           retention-days: 30
