@@ -55,24 +55,6 @@ jobs:
           }
           $icon.Dispose(); $fontA.Dispose(); $fontD.Dispose(); $brushBlue.Dispose(); $brushWhite.Dispose(); $g.Dispose(); $bmp.Dispose()
 
-      - name: Harden modern dashboard layout
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $p='native-v2.1\src\app\main_v25.cpp'
-          $s=Get-Content $p -Raw
-          $s=$s.Replace('#include <chrono>',"#include <chrono>`r`n#include <cwctype>")
-          $old='void layout(HWND h){RECT r{};GetClientRect(h,&r);int w=r.right;int top=214;MoveWindow(g_search,24,158,260,36,TRUE);MoveWindow(g_filter,296,158,150,220,TRUE);int bx=w-24;MoveWindow(g_open,bx-112,158,112,36,TRUE);bx-=122;MoveWindow(g_resume_all,bx-112,158,112,36,TRUE);bx-=122;MoveWindow(g_pause_all,bx-112,158,112,36,TRUE);MoveWindow(g_list,24,top,w-48,std::max(120,r.bottom-top-56),TRUE);}'
-          $new='void layout(HWND h){RECT r{};GetClientRect(h,&r);int w=(int)r.right;int y=158,top=214;int x=24;MoveWindow(g_search,x,y,220,36,TRUE);x+=232;MoveWindow(g_filter,x,y,132,220,TRUE);x+=144;MoveWindow(g_add,x,y,126,36,TRUE);x+=134;MoveWindow(g_pause,x,y,82,36,TRUE);x+=90;MoveWindow(g_resume,x,y,88,36,TRUE);x+=96;MoveWindow(g_cancel,x,y,82,36,TRUE);x+=90;MoveWindow(g_pause_all,x,y,96,36,TRUE);x+=104;MoveWindow(g_resume_all,x,y,102,36,TRUE);x+=110;MoveWindow(g_open,x,y,108,36,TRUE);MoveWindow(g_list,24,top,std::max(400,w-48),(int)std::max<LONG>(120,r.bottom-top-56),TRUE);}'
-          if(-not $s.Contains($old)){throw 'v2.5 layout signature changed'}
-          $s=$s.Replace($old,$new)
-          $s=$s.Replace('int gap=12,cw=(std::max(900,cr.right)-48-gap*3)/4;','int gap=12,cw=((int)std::max<LONG>(900,cr.right)-48-gap*3)/4;')
-          $old2='auto tlen=GetWindowTextLengthW(d->hwndItem);std::wstring t(tlen,L''\0'');GetWindowTextW(d->hwndItem,t.data(),tlen+1);draw_text(d->hDC,t.c_str(),d->rcItem,disabled?RGB(255,255,255):C_MUTED,g_font_bold,DT_CENTER|DT_VCENTER|DT_SINGLELINE);'
-          $new2='auto tlen=GetWindowTextLengthW(d->hwndItem);std::vector<wchar_t>tb((std::size_t)tlen+1);GetWindowTextW(d->hwndItem,tb.data(),tlen+1);draw_text(d->hDC,tb.data(),d->rcItem,disabled?RGB(255,255,255):C_MUTED,g_font_bold,DT_CENTER|DT_VCENTER|DT_SINGLELINE);'
-          if(-not $s.Contains($old2)){throw 'v2.5 button draw signature changed'}
-          $s=$s.Replace($old2,$new2)
-          Set-Content $p $s -Encoding UTF8
-
       - name: Tune media telemetry
         shell: powershell
         run: |
@@ -86,9 +68,11 @@ jobs:
       - name: Verify v2.5 sources
         shell: powershell
         run: |
-          if(-not (Test-Path 'native-v2.1\src\app\main_v25.cpp')){throw 'Modern UI source missing'}
+          if(-not (Test-Path 'native-v2.1\src\app\main_v25_modern.cpp')){throw 'Modern UI source missing'}
           $cm=Get-Content 'native-v2.1\CMakeLists.txt' -Raw
-          if(-not $cm.Contains('main_v25.cpp')){throw 'CMake is not using v2.5 UI'}
+          if(-not $cm.Contains('main_v25_modern.cpp')){throw 'CMake is not using final v2.5 UI'}
+          $iss=Get-Content 'native-v2.1\installer\AIRI-DM-Native.iss' -Raw
+          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.5')){throw 'Installer version is not v2.5'}
           $m=Get-Content 'native-v2.1\browser-extension\manifest.json' -Raw | ConvertFrom-Json
           if($m.version -ne '3.4.0'){throw "Unexpected extension version $($m.version)"}
           if(-not (Test-Path 'native-v2.1\browser-extension\universal-overlay.js')){throw 'Universal media overlay missing'}
@@ -166,7 +150,7 @@ jobs:
           name: AIRI Download Manager v2.5 Modern Smart Dashboard
           prerelease: true
           body: |
-            AIRI v2.5 redesigns the native Windows desktop with a modern dark dashboard, live statistic cards, graphical per-download progress bars, realtime speed and ETA, downloaded/total size, search and status filters, pause/resume all controls, universal media capture and the existing Turbo Engine.
+            AIRI v2.5 redesigns the native Windows desktop with a modern dark dashboard, live statistic cards, graphical per-download progress bars, realtime speed and ETA, downloaded/total size, search and status filters, pause/resume all controls, double-click open, universal media capture and the existing Turbo Engine.
           files: |
             native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.5.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
