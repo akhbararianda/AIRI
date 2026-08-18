@@ -3,91 +3,145 @@
 **Modern Windows download manager by AIRI Technology**  
 Founder: **Akhbar Arianda**
 
-AIRI Download Manager is a native Windows download manager focused on fast direct downloads, browser integration, universal media detection, realtime telemetry, and a clean AIRI visual identity.
+AIRI Download Manager is a native Windows download manager focused on accelerated direct downloads, browser integration, universal media detection, licensing, realtime telemetry, and the clean AIRI Cream + AIRI Blue visual identity.
 
-> Current commercial field-test build: **v2.6.2 Commercial Stable**
-> Official offline license issuer: **AIRI License Manager — Admin Edition v1.1**
+> Current commercial field-test target: **v2.7 — License Cloud & Intelligence**  
+> Offline license issuer: **AIRI License Manager — Admin Edition v1.1**
 
 ## AIRI Identity
 
-- Warm AIRI Cream surfaces
+- AIRI Cream surfaces
 - AIRI Blue primary controls
 - Modern light dashboard
 - Graphical progress bars
 - Realtime speed, downloaded/total, ETA, Started and Elapsed
+- Developed by AIRI Technology · Founder Akhbar Arianda
 
-## Main Features
+## Download Features
 
-- Native Windows C++ desktop application
+- Native Windows C++ application
 - Turbo segmented HTTP/HTTPS downloads
 - Pause / Resume / Cancel for direct downloads
 - Universal browser download handoff
-- Universal video/audio detector on ordinary HTTP/HTTPS pages
+- Universal video/audio detector across ordinary websites
 - Direct MP4/WebM capture
-- HLS/DASH page-extractor fallback
+- HLS/DASH extractor fallback
 - yt-dlp + FFmpeg + Deno bundled by the installer
 - Realtime media progress, speed, ETA and merge status
 - Media process-tree Cancel
-- Open final downloaded media file from the desktop app
+- Open final downloaded media file
 - Search and status filters
-- Pause All / Resume All for direct downloads
+- Pause All / Resume All
 - Chrome/Edge Native Messaging bridge
 
-## Commercial Trial & Licensing
+## Commercial Trial & Offline Licensing
 
-AIRI Download Manager includes a **14-day full-feature trial**.
+AIRI includes a **14-day full-feature trial**. After expiry the application can still be opened for license activation, while new downloads are blocked until activation.
 
-During the trial, normal download features remain available. When the trial expires, the application can still be opened to review information and activate a license, while new AIRI downloads are blocked until activation.
-
-Commercial licenses use signed `AIRI1...` keys and a Machine ID displayed inside AIRI. The customer application contains only the production public verification key. The corresponding private signing key stays with AIRI Technology and is never bundled with the customer installer.
-
-The production signing pair is CI-tested with a deliberately expired signed token, proving that the Admin Edition and customer build share the correct RSA key pair without publishing a usable license.
+Commercial licenses use signed `AIRI1...` keys and the AIRI Machine ID. The customer application contains only the production RSA public key. The private signing key remains offline with AIRI Technology and is never bundled with customer software.
 
 ### AIRI License Manager — Admin Edition v1.1
 
-The admin utility is for AIRI Technology only. It can generate signed licenses, keep a local SQLite customer/license database, search license history, resend keys, load a customer for renewal/reissue, and export records to CSV.
+The private admin utility can:
 
-The Admin Edition validates the AIRI production public-key fingerprint before it can issue a license. The private signing key is loaded from an external file and is never embedded in the admin executable.
+- issue Pro / Business / Enterprise licenses
+- create Lifetime, yearly, monthly, custom-duration or explicit-expiry licenses
+- bind a license to a Machine ID
+- keep a local SQLite customer/license database
+- search and reload customers
+- resend existing license keys
+- export license/customer records to CSV
+
+## AIRI v2.7 License Cloud & Intelligence
+
+`license-cloud/` contains the self-hosted PHP + MySQL licensing backend and admin dashboard.
+
+Cloud capabilities:
+
+- total installation count
+- active users in 24 hours
+- monthly active users
+- licensed/trial device counts
+- license activation and heartbeat
+- device limits per license
+- suspend/revoke license
+- revoke individual devices
+- 7-day offline grace
+- activation-burst detection
+- cloned Installation ID detection
+- clock rollback security event
+- risk scoring
+- security event log
+- binary SHA-256 integrity fingerprint
+- official build hash registry and optional integrity enforcement
+- admin audit log
+
+License Cloud is privacy-minimal. It does **not** collect browsing history, download URLs, filenames, cookies, media titles, or a user's downloaded-file history. Device and license identifiers stored by the server are hashed/pseudonymous where possible.
+
+See [`license-cloud/README.md`](license-cloud/README.md) for deployment instructions.
+
+## Anti-piracy model
+
+AIRI combines multiple controls rather than relying on one local check:
+
+1. RSA-signed offline license keys.
+2. Machine-bound activation.
+3. License Cloud check-in.
+4. Device-count limits.
+5. Suspend/revoke controls.
+6. Trial clock rollback reporting.
+7. Executable SHA-256 integrity comparison against official builds.
+8. Risk scoring for suspicious activation/device patterns.
+9. Seven-day offline grace so legitimate customers are not immediately blocked by internet/server outages.
+
+No system can guarantee detection of every heavily patched/cracked executable, so Windows Authenticode signing remains recommended before a large paid launch.
 
 ## Browser Media Capture
 
-The AIRI browser extension detects media through both page elements and browser network activity. The AIRI download overlay can appear on compatible video players across ordinary websites—not only YouTube.
-
-AIRI does **not** bypass DRM or protected playback systems such as Widevine.
+The browser extension detects media using both page elements and browser network activity. AIRI does **not** bypass DRM/protected playback systems such as Widevine.
 
 ## Installation
 
-1. Download the current customer installer from **Releases**.
+1. Download the current Windows installer from **Releases**.
 2. Install AIRI Download Manager.
-3. Open Chrome or Edge extensions and load/reload the AIRI browser extension if required.
+3. Load/reload the AIRI extension in Chrome or Edge when required.
 4. Run **Test AIRI connection** from the extension popup.
-5. Browse normally. AIRI can intercept ordinary downloads and expose a download button on compatible media players.
+5. Activate a license after the trial when required.
 
-## Public Release Checklist
+## License Cloud deployment
 
-Before a paid production launch, AIRI Technology should additionally complete:
+The cloud service requires PHP 8.1+, MySQL/MariaDB, and HTTPS. Import `license-cloud/schema.sql`, create `license-cloud/config.php` from the example, and set the web document root to `license-cloud/public/`.
+
+The v2.7 GitHub build can bundle the production endpoint automatically using repository variables:
+
+- `AIRI_LICENSE_CLOUD_URL`
+- `AIRI_LICENSE_CLOUD_ENFORCE=1`
+
+When those variables are absent, the v2.7 cloud client remains dormant/fail-safe and local licensing continues to work.
+
+## Before broad paid distribution
 
 - Windows Authenticode code signing
+- HTTPS production License Cloud deployment
+- register the official EXE SHA-256 in License Cloud
 - Chrome Web Store / Microsoft Edge Add-ons publication
-- Product website and checkout
-- Online activation/payment backend for larger-scale sales
+- product website and checkout
 - EULA, Privacy Policy, Terms of Sale and support policy
-- Wider Windows compatibility and field testing
+- wider Windows compatibility/field testing
 
-## Development
-
-Repository: `akhbararianda/AIRI`
-
-Core desktop stack:
+## Development Stack
 
 - C++20
 - Win32 / Common Controls
 - WinHTTP
+- BCrypt
 - yt-dlp
 - FFmpeg
 - Deno
 - Inno Setup
-- GitHub Actions Windows builds
+- PHP 8.1+
+- MySQL / MariaDB
+- GitHub Actions
 
 ## Publisher
 
