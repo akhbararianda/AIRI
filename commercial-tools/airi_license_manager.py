@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import csv
 import datetime as dt
 import hashlib
 import json
 import os
+import sqlite3
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -13,17 +15,14 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 PRODUCT = "AIRI-DM"
-APP_TITLE = "AIRI License Manager — Admin Edition"
+APP_TITLE = "AIRI License Manager — Admin Edition v1.1"
 EXPECTED_PUBLIC_FINGERPRINT = "00F12E8BC33FCBD1495168F3F54800B1C80AD041F1FBC5D75C49707C6D4891CE"
 AIRI_BLUE = "#0F4C81"
-AIRI_SKY = "#58A6FF"
 AIRI_CREAM = "#FFF8EA"
 AIRI_NAVY = "#17283F"
 AIRI_MUTED = "#607086"
 WHITE = "#FFFFFF"
 BORDER = "#DCE6F0"
-GREEN = "#17643A"
-RED = "#A12A2A"
 
 
 def b64url(data: bytes) -> str:
@@ -59,8 +58,15 @@ def expiry_timestamp(mode: str, custom_days: str, explicit_date: str) -> int:
     return int((dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=days)).timestamp())
 
 
-def issue_license(private_key_path: Path, customer: str, machine: str, edition: str,
-                  validity_mode: str, custom_days: str, explicit_date: str) -> tuple[str, dict, str]:
+def issue_license(
+    private_key_path: Path,
+    customer: str,
+    machine: str,
+    edition: str,
+    validity_mode: str,
+    custom_days: str,
+    explicit_date: str,
+) -> tuple[str, dict, str]:
     if not customer.strip():
         raise ValueError("Customer name is required.")
     machine = machine.strip().upper()
@@ -92,18 +98,235 @@ def issue_license(private_key_path: Path, customer: str, machine: str, edition: 
     return license_key, payload, fp
 
 
+class LicenseStore:
+    def __init__(self, base: Path):
+        self.path = base / "licenses.db"
+        self.legacy_path = base / "licenses.json"
+        self.db = sqlite3.connect(self.path)
+        self.db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS licenses(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issued_at TEXT NOT NULL,
+                customer TEXT NOT NULL,
+                edition TEXT NOT NULL,
+                machine TEXT NOT NULL,
+                expiry TEXT NOT NULL,
+                license_key TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_license_customer ON licenses(customer)")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_license_machine ON licenses(machine)")
+        self.db.commit()
+        self._migrate_legacy()
+
+    def _migrate_legacy(self):
+        if not self.legacy_path.exists():
+            return
+        marker = self.legacy_path.with_suffix(".json.migrated")
+        if marker.exists():
+            return
+        try:
+            rows = json.loads(self.legacy_path.read_text(encoding="utf-8"))
+            for row in rows:
+                self.db.execute(
+                    "INSERT INTO licenses(issued_at,customer,edition,machine,expiry,license_key) VALUES(?,?,?,?,?,?)",
+                    (
+                        row.get("issued_at", ""),
+                        row.get("customer", "Unknown"),
+                        row.get("edition", "Pro"),
+                        row.get("machine", ""),
+                        str(row.get("expiry", "0")),
+                        "",
+                    ),
+                )
+            self.db.commit()
+            marker.write_text("Legacy JSON history migrated to licenses.db\n", encoding="utf-8")
+        except Exception:
+            pass
+
+    def add(self, payload: dict, license_key: str) -> int:
+        cur = self.db.execute(
+            "INSERT INTO licenses(issued_at,customer,edition,machine,expiry,license_key) VALUES(?,?,?,?,?,?)",
+            (
+                dt.datetime.now(dt.timezone.utc).isoformat(),
+                payload["customer"],
+                payload["edition"],
+                payload["machine"],
+                payload["expiry"],
+                license_key,
+            ),
+        )
+        self.db.commit()
+        return int(cur.lastrowid)
+
+    def count(self) -> int:
+        return int(self.db.execute("SELECT COUNT(*) FROM licenses").fetchone()[0])
+
+    def search(self, term: str = "") -> list[tuple]:
+        term = term.strip()
+        if not term:
+            return self.db.execute(
+                "SELECT id,issued_at,customer,edition,machine,expiry,license_key FROM licenses ORDER BY id DESC LIMIT 1000"
+            ).fetchall()
+        q = f"%{term}%"
+        return self.db.execute(
+            """
+            SELECT id,issued_at,customer,edition,machine,expiry,license_key
+            FROM licenses
+            WHERE customer LIKE ? OR machine LIKE ? OR edition LIKE ?
+            ORDER BY id DESC LIMIT 1000
+            """,
+            (q, q, q),
+        ).fetchall()
+
+    def get(self, record_id: int):
+        return self.db.execute(
+            "SELECT id,issued_at,customer,edition,machine,expiry,license_key FROM licenses WHERE id=?",
+            (record_id,),
+        ).fetchone()
+
+    def export_csv(self, path: Path):
+        rows = self.search("")
+        with path.open("w", newline="", encoding="utf-8-sig") as f:
+            w = csv.writer(f)
+            w.writerow(["ID", "Issued UTC", "Customer", "Edition", "Machine ID", "Expiry", "License Key"])
+            w.writerows(rows)
+
+
+def expiry_label(value: str) -> str:
+    try:
+        ts = int(value)
+    except Exception:
+        return value or "-"
+    if ts == 0:
+        return "Lifetime"
+    return dt.datetime.fromtimestamp(ts, dt.timezone.utc).strftime("%Y-%m-%d")
+
+
+class HistoryWindow(tk.Toplevel):
+    def __init__(self, parent: "LicenseManagerApp"):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("License History — AIRI Technology")
+        self.geometry("1120x620")
+        self.minsize(900, 520)
+        self.configure(bg=AIRI_CREAM)
+        self.search_var = tk.StringVar()
+        self._build()
+        self.refresh()
+
+    def _build(self):
+        top = tk.Frame(self, bg=AIRI_CREAM)
+        top.pack(fill="x", padx=22, pady=(20, 10))
+        tk.Label(top, text="License History", bg=AIRI_CREAM, fg=AIRI_NAVY,
+                 font=("Segoe UI Semibold", 20)).pack(side="left")
+        tk.Label(top, text="AIRI Technology", bg=AIRI_CREAM, fg=AIRI_BLUE,
+                 font=("Segoe UI Semibold", 10)).pack(side="right")
+
+        tools = tk.Frame(self, bg=AIRI_CREAM)
+        tools.pack(fill="x", padx=22, pady=(0, 10))
+        entry = ttk.Entry(tools, textvariable=self.search_var)
+        entry.pack(side="left", fill="x", expand=True)
+        entry.bind("<KeyRelease>", lambda _e: self.refresh())
+        ttk.Button(tools, text="Export CSV", style="Secondary.TButton", command=self.export_csv).pack(side="left", padx=(10, 0))
+
+        wrap = tk.Frame(self, bg=WHITE, highlightbackground=BORDER, highlightthickness=1)
+        wrap.pack(fill="both", expand=True, padx=22, pady=(0, 12))
+        cols = ("issued", "customer", "edition", "machine", "expiry")
+        self.tree = ttk.Treeview(wrap, columns=cols, show="headings", selectmode="browse")
+        self.tree.heading("issued", text="Issued")
+        self.tree.heading("customer", text="Customer")
+        self.tree.heading("edition", text="Edition")
+        self.tree.heading("machine", text="Machine ID")
+        self.tree.heading("expiry", text="Expiry")
+        self.tree.column("issued", width=145, anchor="w")
+        self.tree.column("customer", width=220, anchor="w")
+        self.tree.column("edition", width=110, anchor="center")
+        self.tree.column("machine", width=330, anchor="w")
+        self.tree.column("expiry", width=110, anchor="center")
+        y = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=y.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        y.pack(side="right", fill="y")
+        self.tree.bind("<Double-1>", lambda _e: self.copy_key())
+
+        actions = tk.Frame(self, bg=AIRI_CREAM)
+        actions.pack(fill="x", padx=22, pady=(0, 18))
+        ttk.Button(actions, text="Copy License Key", style="Primary.TButton", command=self.copy_key).pack(side="left")
+        ttk.Button(actions, text="Load Customer", style="Secondary.TButton", command=self.load_customer).pack(side="left", padx=(10, 0))
+        ttk.Button(actions, text="Refresh", style="Secondary.TButton", command=self.refresh).pack(side="left", padx=(10, 0))
+
+    def selected_record(self):
+        sel = self.tree.selection()
+        if not sel:
+            return None
+        return self.parent.store.get(int(sel[0]))
+
+    def refresh(self):
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+        for row in self.parent.store.search(self.search_var.get()):
+            rec_id, issued, customer, edition, machine, expiry, _key = row
+            try:
+                issued_label = dt.datetime.fromisoformat(issued).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                issued_label = issued[:16]
+            self.tree.insert("", "end", iid=str(rec_id),
+                             values=(issued_label, customer, edition, machine, expiry_label(expiry)))
+
+    def copy_key(self):
+        row = self.selected_record()
+        if not row:
+            messagebox.showinfo(APP_TITLE, "Select a license first.", parent=self)
+            return
+        key = row[6]
+        if not key:
+            messagebox.showwarning(APP_TITLE, "This migrated legacy record does not contain the full license key.", parent=self)
+            return
+        self.clipboard_clear()
+        self.clipboard_append(key)
+        self.update()
+        self.parent.status.set(f"License for {row[2]} copied from history")
+
+    def load_customer(self):
+        row = self.selected_record()
+        if not row:
+            messagebox.showinfo(APP_TITLE, "Select a customer first.", parent=self)
+            return
+        self.parent.customer.set(row[2])
+        self.parent.edition.set(row[3])
+        self.parent.machine.set(row[4])
+        self.parent.lift()
+        self.parent.focus_force()
+        self.parent.status.set(f"Loaded customer: {row[2]}")
+
+    def export_csv(self):
+        p = filedialog.asksaveasfilename(
+            parent=self,
+            title="Export AIRI license history",
+            defaultextension=".csv",
+            initialfile=f"AIRI-License-History-{dt.date.today().isoformat()}.csv",
+            filetypes=[("CSV file", "*.csv")],
+        )
+        if p:
+            self.parent.store.export_csv(Path(p))
+            messagebox.showinfo(APP_TITLE, f"History exported to:\n{p}", parent=self)
+
+
 class LicenseManagerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("980x700")
-        self.minsize(900, 640)
+        self.geometry("1000x720")
+        self.minsize(920, 660)
         self.configure(bg=AIRI_CREAM)
 
         base = Path(os.getenv("APPDATA", str(Path.home()))) / "AIRI Technology" / "License Manager"
         base.mkdir(parents=True, exist_ok=True)
         self.data_dir = base
-        self.history_path = base / "licenses.json"
+        self.store = LicenseStore(base)
 
         self.key_path = tk.StringVar(value=str(base / "airi-license-private.pem"))
         self.customer = tk.StringVar()
@@ -114,7 +337,7 @@ class LicenseManagerApp(tk.Tk):
         self.expiry_date = tk.StringVar(value=(dt.date.today() + dt.timedelta(days=365)).isoformat())
         self.status = tk.StringVar(value="Ready — load the AIRI Technology signing key")
         self.fingerprint = tk.StringVar(value="Signing key not loaded")
-        self.license_text = None
+        self.license_text: tk.Text | None = None
 
         self._build_styles()
         self._build_ui()
@@ -127,10 +350,7 @@ class LicenseManagerApp(tk.Tk):
         except tk.TclError:
             pass
         style.configure("TFrame", background=AIRI_CREAM)
-        style.configure("Card.TFrame", background=WHITE, relief="flat")
         style.configure("TLabel", background=AIRI_CREAM, foreground=AIRI_NAVY, font=("Segoe UI", 10))
-        style.configure("Card.TLabel", background=WHITE, foreground=AIRI_NAVY, font=("Segoe UI", 10))
-        style.configure("Muted.Card.TLabel", background=WHITE, foreground=AIRI_MUTED, font=("Segoe UI", 9))
         style.configure("Title.TLabel", background=AIRI_CREAM, foreground=AIRI_NAVY, font=("Segoe UI Semibold", 24))
         style.configure("Brand.TLabel", background=AIRI_CREAM, foreground=AIRI_BLUE, font=("Segoe UI Semibold", 10))
         style.configure("Primary.TButton", font=("Segoe UI Semibold", 10), padding=(16, 10), foreground=WHITE, background=AIRI_BLUE)
@@ -139,6 +359,8 @@ class LicenseManagerApp(tk.Tk):
         style.map("Secondary.TButton", background=[("active", "#E2EFF9")])
         style.configure("TEntry", padding=8, fieldbackground=WHITE)
         style.configure("TCombobox", padding=7, fieldbackground=WHITE)
+        style.configure("Treeview", rowheight=30, font=("Segoe UI", 9), background=WHITE, fieldbackground=WHITE, foreground=AIRI_NAVY)
+        style.configure("Treeview.Heading", font=("Segoe UI Semibold", 9), background="#EDF5FC", foreground=AIRI_BLUE)
 
     def _card(self, parent, **grid):
         frame = tk.Frame(parent, bg=WHITE, highlightbackground=BORDER, highlightthickness=1, bd=0)
@@ -153,8 +375,8 @@ class LicenseManagerApp(tk.Tk):
         root.rowconfigure(3, weight=1)
 
         ttk.Label(root, text="AIRI LICENSE MANAGER", style="Brand.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(root, text="Admin Edition", style="Title.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
-        ttk.Label(root, text="Issue signed licenses for AIRI Download Manager", foreground=AIRI_MUTED,
+        ttk.Label(root, text="Admin Edition v1.1", style="Title.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
+        ttk.Label(root, text="Issue and manage signed AIRI Download Manager licenses", foreground=AIRI_MUTED,
                   background=AIRI_CREAM, font=("Segoe UI", 10)).grid(row=2, column=0, sticky="w", pady=(3, 18))
         badge = tk.Label(root, text="AIRI Technology  •  Founder Akhbar Arianda", bg="#EDF5FC", fg=AIRI_BLUE,
                          font=("Segoe UI Semibold", 9), padx=12, pady=7)
@@ -180,7 +402,7 @@ class LicenseManagerApp(tk.Tk):
         validity = ttk.Combobox(left, textvariable=self.validity,
                                 values=("Lifetime", "30 Days", "1 Year", "Custom Days", "Expiry Date"), state="readonly")
         validity.grid(row=9, column=0, sticky="ew", padx=20)
-        validity.bind("<<ComboboxSelected>>", lambda e: self._refresh_validity_fields())
+        validity.bind("<<ComboboxSelected>>", lambda _e: self._refresh_validity_fields())
 
         self.custom_frame = tk.Frame(left, bg=WHITE)
         self.custom_frame.grid(row=10, column=0, sticky="ew", padx=20, pady=(10, 0))
@@ -204,7 +426,12 @@ class LicenseManagerApp(tk.Tk):
                  font=("Consolas", 8), wraplength=370, justify="left").grid(row=1, column=0, sticky="w", padx=12, pady=(0, 6))
         ttk.Button(keybox, text="Select private key", style="Secondary.TButton", command=self.select_key).grid(row=2, column=0, sticky="w", padx=12, pady=(0, 10))
 
-        ttk.Button(left, text="Generate License", style="Primary.TButton", command=self.generate).grid(row=13, column=0, sticky="ew", padx=20, pady=(8, 20))
+        buttons = tk.Frame(left, bg=WHITE)
+        buttons.grid(row=13, column=0, sticky="ew", padx=20, pady=(8, 20))
+        buttons.columnconfigure(0, weight=2)
+        buttons.columnconfigure(1, weight=1)
+        ttk.Button(buttons, text="Generate License", style="Primary.TButton", command=self.generate).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+        ttk.Button(buttons, text="History", style="Secondary.TButton", command=self.open_history).grid(row=0, column=1, sticky="ew", padx=(5, 0))
 
         tk.Label(right, text="Generated License", bg=WHITE, fg=AIRI_NAVY,
                  font=("Segoe UI Semibold", 14)).grid(row=0, column=0, sticky="w", padx=20, pady=(18, 4))
@@ -245,18 +472,20 @@ class LicenseManagerApp(tk.Tk):
         ttk.Entry(parent, textvariable=variable).grid(row=row + 1, column=0, sticky="ew", padx=20)
 
     def _refresh_validity_fields(self):
-        mode = self.validity.get()
-        if mode == "Custom Days":
+        if self.validity.get() == "Custom Days":
             self.custom_frame.grid()
         else:
             self.custom_frame.grid_remove()
-        if mode == "Expiry Date":
+        if self.validity.get() == "Expiry Date":
             self.expiry_frame.grid()
         else:
             self.expiry_frame.grid_remove()
 
     def select_key(self):
-        p = filedialog.askopenfilename(title="Select AIRI private signing key", filetypes=[("PEM private key", "*.pem"), ("All files", "*.*")])
+        p = filedialog.askopenfilename(
+            title="Select AIRI private signing key",
+            filetypes=[("PEM private key", "*.pem"), ("All files", "*.*")],
+        )
         if not p:
             return
         self.key_path.set(p)
@@ -273,29 +502,38 @@ class LicenseManagerApp(tk.Tk):
     def generate(self):
         try:
             license_key, payload, fp = issue_license(
-                Path(self.key_path.get()), self.customer.get(), self.machine.get(), self.edition.get(),
-                self.validity.get(), self.custom_days.get(), self.expiry_date.get()
+                Path(self.key_path.get()),
+                self.customer.get(),
+                self.machine.get(),
+                self.edition.get(),
+                self.validity.get(),
+                self.custom_days.get(),
+                self.expiry_date.get(),
             )
         except Exception as exc:
             messagebox.showerror("Cannot generate license", str(exc))
             self.status.set("License generation failed")
             return
 
+        assert self.license_text is not None
         self.license_text.delete("1.0", "end")
         self.license_text.insert("1.0", license_key)
         expiry = int(payload["expiry"])
-        expiry_label = "Lifetime" if expiry == 0 else dt.datetime.fromtimestamp(expiry, dt.timezone.utc).strftime("%Y-%m-%d UTC")
-        self.meta.configure(text=(
-            f"Customer: {payload['customer']}\n"
-            f"Edition: {payload['edition']}  •  Expiry: {expiry_label}\n"
-            f"Machine: {payload['machine']}\n"
-            f"Signer fingerprint: {fp[:16]}…"
-        ))
-        self._append_history(payload, license_key)
+        exp_label = "Lifetime" if expiry == 0 else dt.datetime.fromtimestamp(expiry, dt.timezone.utc).strftime("%Y-%m-%d UTC")
+        self.meta.configure(
+            text=(
+                f"Customer: {payload['customer']}\n"
+                f"Edition: {payload['edition']}  •  Expiry: {exp_label}\n"
+                f"Machine: {payload['machine']}\n"
+                f"Signer fingerprint: {fp[:16]}…"
+            )
+        )
+        self.store.add(payload, license_key)
         self._load_history_count()
-        self.status.set("License generated and signed successfully")
+        self.status.set("License generated, saved to history, and signed successfully")
 
     def copy_key(self):
+        assert self.license_text is not None
         key = self.license_text.get("1.0", "end").strip()
         if not key:
             messagebox.showinfo(APP_TITLE, "Generate a license first.")
@@ -306,42 +544,27 @@ class LicenseManagerApp(tk.Tk):
         self.status.set("License key copied — send only this key to the buyer")
 
     def save_key(self):
+        assert self.license_text is not None
         key = self.license_text.get("1.0", "end").strip()
         if not key:
             messagebox.showinfo(APP_TITLE, "Generate a license first.")
             return
         customer = "".join(c if c.isalnum() or c in "-_" else "_" for c in self.customer.get().strip()) or "customer"
-        p = filedialog.asksaveasfilename(title="Save AIRI license", defaultextension=".txt",
-                                         initialfile=f"AIRI-License-{customer}.txt", filetypes=[("Text file", "*.txt")])
+        p = filedialog.asksaveasfilename(
+            title="Save AIRI license",
+            defaultextension=".txt",
+            initialfile=f"AIRI-License-{customer}.txt",
+            filetypes=[("Text file", "*.txt")],
+        )
         if p:
             Path(p).write_text(key + "\n", encoding="utf-8")
             self.status.set(f"License saved: {p}")
 
-    def _append_history(self, payload: dict, license_key: str):
-        history = []
-        if self.history_path.exists():
-            try:
-                history = json.loads(self.history_path.read_text(encoding="utf-8"))
-            except Exception:
-                history = []
-        history.append({
-            "issued_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "customer": payload["customer"],
-            "edition": payload["edition"],
-            "machine": payload["machine"],
-            "expiry": payload["expiry"],
-            "license_preview": license_key[:24] + "…",
-        })
-        self.history_path.write_text(json.dumps(history[-1000:], ensure_ascii=False, indent=2), encoding="utf-8")
+    def open_history(self):
+        HistoryWindow(self)
 
     def _load_history_count(self):
-        count = 0
-        if self.history_path.exists():
-            try:
-                count = len(json.loads(self.history_path.read_text(encoding="utf-8")))
-            except Exception:
-                pass
-        self.history_label.configure(text=f"{count} license(s) issued on this PC")
+        self.history_label.configure(text=f"{self.store.count()} license(s) issued on this PC")
 
 
 if __name__ == "__main__":
