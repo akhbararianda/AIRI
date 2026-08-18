@@ -1,4 +1,4 @@
-name: Build AIRI Download Manager v2.5 Modern
+name: Build AIRI Download Manager v2.6 AIRI Edition
 
 on:
   workflow_dispatch:
@@ -21,39 +21,50 @@ jobs:
       - name: Generate AIRI branding assets
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
+          $ErrorActionPreference='Stop'
           Add-Type -AssemblyName System.Drawing
-          $appDir = Join-Path $PWD 'native-v2.1\src\app'
-          $extDir = Join-Path $PWD 'native-v2.1\browser-extension\icons'
+          $appDir=Join-Path $PWD 'native-v2.1\src\app'
+          $extDir=Join-Path $PWD 'native-v2.1\browser-extension\icons'
           New-Item -ItemType Directory -Force $extDir | Out-Null
-          $bmp = New-Object System.Drawing.Bitmap 256,256
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-          $cream = [System.Drawing.Color]::FromArgb(255,248,234)
-          $blue = [System.Drawing.Color]::FromArgb(15,76,129)
-          $white = [System.Drawing.Color]::White
+          $bmp=New-Object System.Drawing.Bitmap 256,256
+          $g=[System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $cream=[System.Drawing.Color]::FromArgb(255,248,234)
+          $blue=[System.Drawing.Color]::FromArgb(15,76,129)
+          $white=[System.Drawing.Color]::White
           $g.Clear($cream)
-          $brushBlue = New-Object System.Drawing.SolidBrush($blue)
-          $brushWhite = New-Object System.Drawing.SolidBrush($white)
+          $brushBlue=New-Object System.Drawing.SolidBrush($blue)
+          $brushWhite=New-Object System.Drawing.SolidBrush($white)
           $g.FillEllipse($brushBlue,18,18,220,220)
-          $fontA = New-Object System.Drawing.Font('Segoe UI',92,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
-          $fontD = New-Object System.Drawing.Font('Segoe UI',64,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
-          $sf = New-Object System.Drawing.StringFormat
-          $sf.Alignment = [System.Drawing.StringAlignment]::Center
-          $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
+          $fontA=New-Object System.Drawing.Font('Segoe UI',92,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $fontD=New-Object System.Drawing.Font('Segoe UI',64,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $sf=New-Object System.Drawing.StringFormat
+          $sf.Alignment=[System.Drawing.StringAlignment]::Center
+          $sf.LineAlignment=[System.Drawing.StringAlignment]::Center
           $g.DrawString('A',$fontA,$brushWhite,(New-Object System.Drawing.RectangleF(22,22,150,180)),$sf)
           $g.DrawString([char]0x2193,$fontD,$brushWhite,(New-Object System.Drawing.RectangleF(120,76,110,130)),$sf)
-          $hIcon = $bmp.GetHicon(); $icon = [System.Drawing.Icon]::FromHandle($hIcon)
-          $fs = [System.IO.File]::Create((Join-Path $appDir 'airi.ico')); $icon.Save($fs); $fs.Close()
-          foreach ($size in 16,32,48,128) {
-            $small = New-Object System.Drawing.Bitmap $size,$size
-            $sg = [System.Drawing.Graphics]::FromImage($small)
-            $sg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $hIcon=$bmp.GetHicon(); $icon=[System.Drawing.Icon]::FromHandle($hIcon)
+          $fs=[System.IO.File]::Create((Join-Path $appDir 'airi.ico')); $icon.Save($fs); $fs.Close()
+          foreach($size in 16,32,48,128){
+            $small=New-Object System.Drawing.Bitmap $size,$size
+            $sg=[System.Drawing.Graphics]::FromImage($small)
+            $sg.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $sg.DrawImage($bmp,0,0,$size,$size)
             $small.Save((Join-Path $extDir ("icon$size.png")),[System.Drawing.Imaging.ImageFormat]::Png)
-            $sg.Dispose(); $small.Dispose()
+            $sg.Dispose();$small.Dispose()
           }
-          $icon.Dispose(); $fontA.Dispose(); $fontD.Dispose(); $brushBlue.Dispose(); $brushWhite.Dispose(); $g.Dispose(); $bmp.Dispose()
+          $icon.Dispose();$fontA.Dispose();$fontD.Dispose();$brushBlue.Dispose();$brushWhite.Dispose();$g.Dispose();$bmp.Dispose()
+
+      - name: Patch AIRI v2.6 product identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $p='native-v2.1\src\app\main_v25_modern.cpp'
+          $s=Get-Content $p -Raw
+          $s=$s.Replace('Smart Turbo + Universal Media Center  •  v2.5 Modern','Smart Turbo + Universal Media Center  •  v2.6 AIRI Edition')
+          $s=$s.Replace('AIRI Turbo  •  ','AIRI Technology  •  Founder Akhbar Arianda  •  ')
+          $s=$s.Replace('AIRI Download Manager v2.5 Modern','AIRI Download Manager v2.6 AIRI Edition')
+          Set-Content $p $s -Encoding UTF8
 
       - name: Tune media telemetry
         shell: powershell
@@ -65,17 +76,18 @@ jobs:
           if($s.Contains($needle)){$s=$s.Replace($needle,' --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist')}
           Set-Content $p $s -Encoding UTF8
 
-      - name: Verify v2.5 sources
+      - name: Verify v2.6 AIRI sources
         shell: powershell
         run: |
-          if(-not (Test-Path 'native-v2.1\src\app\main_v25_modern.cpp')){throw 'Modern UI source missing'}
+          if(-not(Test-Path 'native-v2.1\src\app\main_v26_airi.cpp')){throw 'AIRI v2.6 themed shell missing'}
           $cm=Get-Content 'native-v2.1\CMakeLists.txt' -Raw
-          if(-not $cm.Contains('main_v25_modern.cpp')){throw 'CMake is not using final v2.5 UI'}
+          if(-not $cm.Contains('main_v26_airi.cpp')){throw 'CMake is not using AIRI v2.6 shell'}
           $iss=Get-Content 'native-v2.1\installer\AIRI-DM-Native.iss' -Raw
-          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.5')){throw 'Installer version is not v2.5'}
+          if(-not $iss.Contains('AIRI-Download-Manager-Setup-v2.6')){throw 'Installer is not v2.6'}
+          if(-not $iss.Contains('AIRI Technology')){throw 'Publisher identity missing'}
           $m=Get-Content 'native-v2.1\browser-extension\manifest.json' -Raw | ConvertFrom-Json
           if($m.version -ne '3.4.0'){throw "Unexpected extension version $($m.version)"}
-          if(-not (Test-Path 'native-v2.1\browser-extension\universal-overlay.js')){throw 'Universal media overlay missing'}
+          if(-not(Test-Path 'native-v2.1\browser-extension\universal-overlay.js')){throw 'Universal overlay missing'}
 
       - name: Configure x64
         shell: powershell
@@ -93,18 +105,18 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $tools=Join-Path $PWD 'native-v2.1\third_party\tools'; New-Item -ItemType Directory -Force $tools | Out-Null
+          $tools=Join-Path $PWD 'native-v2.1\third_party\tools';New-Item -ItemType Directory -Force $tools|Out-Null
           $yt=Join-Path $tools 'yt-dlp.exe'
           Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp.exe' -OutFile $yt
           $ytHash=(Get-FileHash $yt -Algorithm SHA256).Hash.ToLower()
           if($ytHash -ne '52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8'){throw "yt-dlp checksum mismatch: $ytHash"}
-          $denoZip=Join-Path $env:RUNNER_TEMP 'deno.zip'; Invoke-WebRequest -Uri 'https://github.com/denoland/deno/releases/download/v2.9.5/deno-x86_64-pc-windows-msvc.zip' -OutFile $denoZip
-          $denoDir=Join-Path $env:RUNNER_TEMP 'deno'; Expand-Archive $denoZip $denoDir -Force; Copy-Item (Join-Path $denoDir 'deno.exe') (Join-Path $tools 'deno.exe') -Force
-          $ffZip=Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'; Invoke-WebRequest -Uri 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $ffZip
-          $ffDir=Join-Path $env:RUNNER_TEMP 'ffmpeg'; Expand-Archive $ffZip $ffDir -Force
-          $ffmpeg=Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse | Select-Object -First 1; $ffprobe=Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse | Select-Object -First 1
+          $denoZip=Join-Path $env:RUNNER_TEMP 'deno.zip';Invoke-WebRequest -Uri 'https://github.com/denoland/deno/releases/download/v2.9.5/deno-x86_64-pc-windows-msvc.zip' -OutFile $denoZip
+          $denoDir=Join-Path $env:RUNNER_TEMP 'deno';Expand-Archive $denoZip $denoDir -Force;Copy-Item (Join-Path $denoDir 'deno.exe') (Join-Path $tools 'deno.exe') -Force
+          $ffZip=Join-Path $env:RUNNER_TEMP 'ffmpeg.zip';Invoke-WebRequest -Uri 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $ffZip
+          $ffDir=Join-Path $env:RUNNER_TEMP 'ffmpeg';Expand-Archive $ffZip $ffDir -Force
+          $ffmpeg=Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse|Select-Object -First 1;$ffprobe=Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse|Select-Object -First 1
           if(-not $ffmpeg -or -not $ffprobe){throw 'FFmpeg tools missing'}
-          Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force; Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
+          Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force;Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
 
       - name: Install Inno Setup
         shell: powershell
@@ -117,7 +129,7 @@ jobs:
       - name: Verify package
         shell: powershell
         run: |
-          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.5.exe'
+          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.exe'
           $app='native-v2.1\build-win\Release\AIRI Download Manager.exe'
           $bridge='native-v2.1\build-win\Release\AIRIDMBridge.exe'
           foreach($f in @($setup,$app,$bridge)){if(-not(Test-Path $f)){throw "Missing $f"}}
@@ -126,33 +138,33 @@ jobs:
       - name: Create SHA256
         shell: powershell
         run: |
-          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.5.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
-          $lines=foreach($f in $files){$h=Get-FileHash $f -Algorithm SHA256; "$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))"}
-          $lines | Set-Content native-v2.1\SHA256SUMS.txt
+          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.6.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
+          $lines=foreach($f in $files){$h=Get-FileHash $f -Algorithm SHA256;"$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))"}
+          $lines|Set-Content native-v2.1\SHA256SUMS.txt
 
-      - name: Upload AIRI v2.5 Windows artifact
+      - name: Upload AIRI v2.6 Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Download-Manager-v2.5-Modern-Windows
+          name: AIRI-Download-Manager-v2.6-AIRI-Edition-Windows
           if-no-files-found: error
           retention-days: 30
           path: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.5.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/browser-extension/**
             native-v2.1/SHA256SUMS.txt
 
-      - name: Publish AIRI v2.5 Modern release
+      - name: Publish AIRI v2.6 release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.5.0-modern
-          name: AIRI Download Manager v2.5 Modern Smart Dashboard
+          tag_name: v2.6.0-airi
+          name: AIRI Download Manager v2.6 AIRI Edition
           prerelease: true
           body: |
-            AIRI v2.5 redesigns the native Windows desktop with a modern dark dashboard, live statistic cards, graphical per-download progress bars, realtime speed and ETA, downloaded/total size, search and status filters, pause/resume all controls, double-click open, universal media capture and the existing Turbo Engine.
+            AIRI v2.6 introduces the AIRI visual identity across desktop and browser: warm cream surfaces, AIRI Blue controls, modern light cards, graphical progress, realtime telemetry and Universal Media Capture. Developed by AIRI Technology. Founder: Akhbar Arianda.
           files: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.5.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.6.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/SHA256SUMS.txt
