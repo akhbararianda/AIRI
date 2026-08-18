@@ -29,7 +29,7 @@ if(WIN32)
     target_compile_definitions(airi_engine PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(airi_engine PUBLIC airi_common winhttp shlwapi shell32)
 
-    add_executable(AIRIDownloadManager WIN32 src/app/main_v25.cpp src/app/app.rc)
+    add_executable(AIRIDownloadManager WIN32 src/app/main_v25_modern.cpp src/app/app.rc)
     target_compile_definitions(AIRIDownloadManager PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(AIRIDownloadManager PRIVATE airi_engine airi_common comctl32 shell32 shlwapi dwmapi ole32)
     set_target_properties(AIRIDownloadManager PROPERTIES OUTPUT_NAME "AIRI Download Manager")
