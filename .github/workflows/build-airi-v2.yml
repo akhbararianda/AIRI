@@ -1,4 +1,4 @@
-name: Build AIRI Download Manager v2.4
+name: Build AIRI Download Manager v2.5 Modern
 
 on:
   workflow_dispatch:
@@ -43,10 +43,8 @@ jobs:
           $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
           $g.DrawString('A',$fontA,$brushWhite,(New-Object System.Drawing.RectangleF(22,22,150,180)),$sf)
           $g.DrawString([char]0x2193,$fontD,$brushWhite,(New-Object System.Drawing.RectangleF(120,76,110,130)),$sf)
-          $hIcon = $bmp.GetHicon()
-          $icon = [System.Drawing.Icon]::FromHandle($hIcon)
-          $fs = [System.IO.File]::Create((Join-Path $appDir 'airi.ico'))
-          $icon.Save($fs); $fs.Close()
+          $hIcon = $bmp.GetHicon(); $icon = [System.Drawing.Icon]::FromHandle($hIcon)
+          $fs = [System.IO.File]::Create((Join-Path $appDir 'airi.ico')); $icon.Save($fs); $fs.Close()
           foreach ($size in 16,32,48,128) {
             $small = New-Object System.Drawing.Bitmap $size,$size
             $sg = [System.Drawing.Graphics]::FromImage($small)
@@ -57,46 +55,43 @@ jobs:
           }
           $icon.Dispose(); $fontA.Dispose(); $fontD.Dispose(); $brushBlue.Dispose(); $brushWhite.Dispose(); $g.Dispose(); $bmp.Dispose()
 
-      - name: Wire realtime media telemetry into UI
+      - name: Harden modern dashboard layout
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $path = 'native-v2.1\src\app\main_v22.cpp'
-          $s = Get-Content $path -Raw
-          $old = 'struct MediaRow{std::uint64_t id{};std::wstring name,status=L"Queued";int progress{};std::filesystem::path dir;bool done{},failed{};};'
-          $new = 'struct MediaRow{std::uint64_t id{};std::wstring name,status=L"Queued";int progress{};std::filesystem::path dir;bool done{},failed{};std::wstring downloaded,total,speed,eta,fragment;};'
-          if ($s.Contains($old)) { $s = $s.Replace($old,$new) }
-          $old = 'j.status=w(p.status);j.progress=std::clamp(p.percent,0,100);j.done=p.status=="Completed";j.failed=p.status=="Failed";break;'
-          $new = 'j.status=w(p.status);j.progress=std::clamp(p.percent,0,100);j.downloaded=w(p.downloaded_text);j.total=w(p.total_text);j.speed=w(p.speed_text);j.eta=w(p.eta_text);j.fragment=w(p.fragment_text);j.done=p.status=="Completed";j.failed=p.status=="Failed";break;'
-          if ($s.Contains($old)) { $s = $s.Replace($old,$new) }
-          $old = 'setcell(r,2,j.status);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,5,L"Media");'
-          $new = 'auto liveStatus=j.status;if(!j.downloaded.empty()&&j.downloaded!=L"NA"){liveStatus+=L" | "+j.downloaded;if(!j.total.empty()&&j.total!=L"NA")liveStatus+=L" / "+j.total;}if(!j.eta.empty()&&j.eta!=L"NA")liveStatus+=L" | ETA "+j.eta;if(!j.fragment.empty()&&j.fragment!=L"NA/NA"&&j.fragment!=L"NA")liveStatus+=L" | frag "+j.fragment;setcell(r,1,!j.total.empty()&&j.total!=L"NA"?j.total:j.downloaded);setcell(r,2,liveStatus);setcell(r,3,std::to_wstring(j.progress)+L"%");setcell(r,4,j.speed.empty()||j.speed==L"NA"?L"-":j.speed);setcell(r,5,L"Media");'
-          if ($s.Contains($old)) { $s = $s.Replace($old,$new) }
-          $s = $s.Replace('Turbo Engine v2.2','Turbo Engine v2.4 Universal')
-          $s = $s.Replace('Turbo Engine v2.3','Turbo Engine v2.4 Universal')
-          $s = $s.Replace('AIRI Turbo v2.2','AIRI Turbo v2.4')
-          $s = $s.Replace('AIRI Turbo v2.3','AIRI Turbo v2.4')
-          $s = $s.Replace('AIRI Download Manager - Turbo v2.2','AIRI Download Manager - Turbo v2.4')
-          $s = $s.Replace('AIRI Download Manager - Turbo v2.3','AIRI Download Manager - Turbo v2.4')
-          Set-Content $path $s -Encoding UTF8
+          $p='native-v2.1\src\app\main_v25.cpp'
+          $s=Get-Content $p -Raw
+          $s=$s.Replace('#include <chrono>','#include <chrono>`r`n#include <cwctype>')
+          $old='void layout(HWND h){RECT r{};GetClientRect(h,&r);int w=r.right;int top=214;MoveWindow(g_search,24,158,260,36,TRUE);MoveWindow(g_filter,296,158,150,220,TRUE);int bx=w-24;MoveWindow(g_open,bx-112,158,112,36,TRUE);bx-=122;MoveWindow(g_resume_all,bx-112,158,112,36,TRUE);bx-=122;MoveWindow(g_pause_all,bx-112,158,112,36,TRUE);MoveWindow(g_list,24,top,w-48,std::max(120,r.bottom-top-56),TRUE);}'
+          $new='void layout(HWND h){RECT r{};GetClientRect(h,&r);int w=(int)r.right;int y=158,top=214;int x=24;MoveWindow(g_search,x,y,220,36,TRUE);x+=232;MoveWindow(g_filter,x,y,132,220,TRUE);x+=144;MoveWindow(g_add,x,y,126,36,TRUE);x+=134;MoveWindow(g_pause,x,y,82,36,TRUE);x+=90;MoveWindow(g_resume,x,y,88,36,TRUE);x+=96;MoveWindow(g_cancel,x,y,82,36,TRUE);x+=90;MoveWindow(g_pause_all,x,y,96,36,TRUE);x+=104;MoveWindow(g_resume_all,x,y,102,36,TRUE);x+=110;MoveWindow(g_open,x,y,108,36,TRUE);MoveWindow(g_list,24,top,std::max(400,w-48),(int)std::max<LONG>(120,r.bottom-top-56),TRUE);}'
+          if(-not $s.Contains($old)){throw 'v2.5 layout signature changed'}
+          $s=$s.Replace($old,$new)
+          $s=$s.Replace('int gap=12,cw=(std::max(900,cr.right)-48-gap*3)/4;','int gap=12,cw=((int)std::max<LONG>(900,cr.right)-48-gap*3)/4;')
+          $old2='auto tlen=GetWindowTextLengthW(d->hwndItem);std::wstring t(tlen,L''\0'');GetWindowTextW(d->hwndItem,t.data(),tlen+1);draw_text(d->hDC,t.c_str(),d->rcItem,disabled?RGB(255,255,255):C_MUTED,g_font_bold,DT_CENTER|DT_VCENTER|DT_SINGLELINE);'
+          $new2='auto tlen=GetWindowTextLengthW(d->hwndItem);std::vector<wchar_t>tb((std::size_t)tlen+1);GetWindowTextW(d->hwndItem,tb.data(),tlen+1);draw_text(d->hDC,tb.data(),d->rcItem,disabled?RGB(255,255,255):C_MUTED,g_font_bold,DT_CENTER|DT_VCENTER|DT_SINGLELINE);'
+          if(-not $s.Contains($old2)){throw 'v2.5 button draw signature changed'}
+          $s=$s.Replace($old2,$new2)
+          Set-Content $p $s -Encoding UTF8
 
-      - name: Tune media engine
+      - name: Tune media telemetry
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
-          $path='native-v2.1\src\engine\media_worker.cpp'
-          $s=Get-Content $path -Raw
+          $ErrorActionPreference='Stop'
+          $p='native-v2.1\src\engine\media_worker.cpp'
+          $s=Get-Content $p -Raw
           $needle=' --ignore-config --newline --no-playlist'
-          if ($s.Contains($needle)) { $s=$s.Replace($needle,' --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist') }
-          Set-Content $path $s -Encoding UTF8
+          if($s.Contains($needle)){$s=$s.Replace($needle,' --ignore-config --newline --progress-delta 0.5 --concurrent-fragments 8 --no-playlist')}
+          Set-Content $p $s -Encoding UTF8
 
-      - name: Verify universal extension
+      - name: Verify v2.5 sources
         shell: powershell
         run: |
-          $m = Get-Content 'native-v2.1\browser-extension\manifest.json' -Raw | ConvertFrom-Json
-          if ($m.version -ne '3.4.0') { throw "Unexpected extension version: $($m.version)" }
-          if (-not (Test-Path 'native-v2.1\browser-extension\universal-overlay.js')) { throw 'Universal overlay missing' }
-          if (-not (Test-Path 'native-v2.1\browser-extension\universal-overlay.css')) { throw 'Universal overlay CSS missing' }
+          if(-not (Test-Path 'native-v2.1\src\app\main_v25.cpp')){throw 'Modern UI source missing'}
+          $cm=Get-Content 'native-v2.1\CMakeLists.txt' -Raw
+          if(-not $cm.Contains('main_v25.cpp')){throw 'CMake is not using v2.5 UI'}
+          $m=Get-Content 'native-v2.1\browser-extension\manifest.json' -Raw | ConvertFrom-Json
+          if($m.version -ne '3.4.0'){throw "Unexpected extension version $($m.version)"}
+          if(-not (Test-Path 'native-v2.1\browser-extension\universal-overlay.js')){throw 'Universal media overlay missing'}
 
       - name: Configure x64
         shell: powershell
@@ -113,87 +108,67 @@ jobs:
       - name: Bundle media engine
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
-          $tools = Join-Path $PWD 'native-v2.1\third_party\tools'
-          New-Item -ItemType Directory -Force $tools | Out-Null
-          $yt = Join-Path $tools 'yt-dlp.exe'
+          $ErrorActionPreference='Stop'
+          $tools=Join-Path $PWD 'native-v2.1\third_party\tools'; New-Item -ItemType Directory -Force $tools | Out-Null
+          $yt=Join-Path $tools 'yt-dlp.exe'
           Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.07.04/yt-dlp.exe' -OutFile $yt
-          $ytHash = (Get-FileHash $yt -Algorithm SHA256).Hash.ToLower()
-          if ($ytHash -ne '52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8') { throw "yt-dlp checksum mismatch: $ytHash" }
-          $denoZip = Join-Path $env:RUNNER_TEMP 'deno.zip'
-          Invoke-WebRequest -Uri 'https://github.com/denoland/deno/releases/download/v2.9.5/deno-x86_64-pc-windows-msvc.zip' -OutFile $denoZip
-          $denoDir = Join-Path $env:RUNNER_TEMP 'deno'
-          Expand-Archive -Path $denoZip -DestinationPath $denoDir -Force
-          Copy-Item (Join-Path $denoDir 'deno.exe') (Join-Path $tools 'deno.exe') -Force
-          $ffZip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
-          Invoke-WebRequest -Uri 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $ffZip
-          $ffDir = Join-Path $env:RUNNER_TEMP 'ffmpeg'
-          Expand-Archive -Path $ffZip -DestinationPath $ffDir -Force
-          $ffmpeg = Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse | Select-Object -First 1
-          $ffprobe = Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse | Select-Object -First 1
-          Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force
-          Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
+          $ytHash=(Get-FileHash $yt -Algorithm SHA256).Hash.ToLower()
+          if($ytHash -ne '52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8'){throw "yt-dlp checksum mismatch: $ytHash"}
+          $denoZip=Join-Path $env:RUNNER_TEMP 'deno.zip'; Invoke-WebRequest -Uri 'https://github.com/denoland/deno/releases/download/v2.9.5/deno-x86_64-pc-windows-msvc.zip' -OutFile $denoZip
+          $denoDir=Join-Path $env:RUNNER_TEMP 'deno'; Expand-Archive $denoZip $denoDir -Force; Copy-Item (Join-Path $denoDir 'deno.exe') (Join-Path $tools 'deno.exe') -Force
+          $ffZip=Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'; Invoke-WebRequest -Uri 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile $ffZip
+          $ffDir=Join-Path $env:RUNNER_TEMP 'ffmpeg'; Expand-Archive $ffZip $ffDir -Force
+          $ffmpeg=Get-ChildItem $ffDir -Filter ffmpeg.exe -Recurse | Select-Object -First 1; $ffprobe=Get-ChildItem $ffDir -Filter ffprobe.exe -Recurse | Select-Object -First 1
+          if(-not $ffmpeg -or -not $ffprobe){throw 'FFmpeg tools missing'}
+          Copy-Item $ffmpeg.FullName (Join-Path $tools 'ffmpeg.exe') -Force; Copy-Item $ffprobe.FullName (Join-Path $tools 'ffprobe.exe') -Force
 
       - name: Install Inno Setup
         shell: powershell
         run: choco install innosetup --no-progress -y
 
-      - name: Patch installer version
-        shell: powershell
-        run: |
-          $p='native-v2.1\installer\AIRI-DM-Native.iss'
-          $s=Get-Content $p -Raw
-          $s=$s -replace '#define MyAppVersion "[^"]+"','#define MyAppVersion "2.4.0"'
-          $s=$s -replace 'OutputBaseFilename=AIRI-Download-Manager-Setup-v2\.[0-9]+','OutputBaseFilename=AIRI-Download-Manager-Setup-v2.4'
-          Set-Content $p $s -Encoding UTF8
-
       - name: Build Setup EXE
         shell: powershell
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" native-v2.1\installer\AIRI-DM-Native.iss'
 
-      - name: Verify Windows binaries
+      - name: Verify package
         shell: powershell
         run: |
-          Get-Item 'native-v2.1\build-win\Release\AIRI Download Manager.exe' | Format-List Name,Length
-          Get-Item 'native-v2.1\build-win\Release\AIRIDMBridge.exe' | Format-List Name,Length
-          Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.4.exe' | Format-List Name,Length
-          $size = (Get-Item 'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.4.exe').Length
-          if ($size -lt 20000000) { throw "Installer unexpectedly small ($size bytes)" }
+          $setup='native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.5.exe'
+          $app='native-v2.1\build-win\Release\AIRI Download Manager.exe'
+          $bridge='native-v2.1\build-win\Release\AIRIDMBridge.exe'
+          foreach($f in @($setup,$app,$bridge)){if(-not(Test-Path $f)){throw "Missing $f"}}
+          if((Get-Item $setup).Length -lt 20000000){throw 'Installer unexpectedly small'}
 
       - name: Create SHA256
         shell: powershell
         run: |
-          $files = @(
-            'native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.4.exe',
-            'native-v2.1\build-win\Release\AIRI Download Manager.exe',
-            'native-v2.1\build-win\Release\AIRIDMBridge.exe'
-          )
-          $lines = foreach ($f in $files) { $h = Get-FileHash $f -Algorithm SHA256; "$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))" }
+          $files=@('native-v2.1\installer\Output\AIRI-Download-Manager-Setup-v2.5.exe','native-v2.1\build-win\Release\AIRI Download Manager.exe','native-v2.1\build-win\Release\AIRIDMBridge.exe')
+          $lines=foreach($f in $files){$h=Get-FileHash $f -Algorithm SHA256; "$($h.Hash.ToLower())  $([IO.Path]::GetFileName($f))"}
           $lines | Set-Content native-v2.1\SHA256SUMS.txt
 
-      - name: Upload AIRI v2.4 Windows artifact
+      - name: Upload AIRI v2.5 Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIRI-Download-Manager-v2.4-Universal-Windows
+          name: AIRI-Download-Manager-v2.5-Modern-Windows
           if-no-files-found: error
           retention-days: 30
           path: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.4.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.5.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/browser-extension/**
             native-v2.1/SHA256SUMS.txt
 
-      - name: Publish AIRI v2.4 Universal release
+      - name: Publish AIRI v2.5 Modern release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.4.0-universal
-          name: AIRI Download Manager v2.4 Universal Media Capture
+          tag_name: v2.5.0-modern
+          name: AIRI Download Manager v2.5 Modern Smart Dashboard
           prerelease: true
           body: |
-            Universal media detector for ordinary HTTP/HTTPS sites: player overlay, DOM media discovery, network media detection, direct MP4/WebM capture, HLS/DASH page-extractor fallback, realtime telemetry, Turbo Engine, and silent media tools. DRM-protected media is not bypassed.
+            AIRI v2.5 redesigns the native Windows desktop with a modern dark dashboard, live statistic cards, graphical per-download progress bars, realtime speed and ETA, downloaded/total size, search and status filters, pause/resume all controls, universal media capture and the existing Turbo Engine.
           files: |
-            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.4.exe
+            native-v2.1/installer/Output/AIRI-Download-Manager-Setup-v2.5.exe
             native-v2.1/build-win/Release/AIRI Download Manager.exe
             native-v2.1/build-win/Release/AIRIDMBridge.exe
             native-v2.1/SHA256SUMS.txt
