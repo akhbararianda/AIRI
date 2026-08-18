@@ -1,5 +1,5 @@
 #define MyAppName "AIRI Download Manager"
-#define MyAppVersion "2.6.2"
+#define MyAppVersion "2.7.0"
 #define MyAppPublisher "AIRI Technology"
 #define MyAppExeName "AIRI Download Manager.exe"
 [Setup]
@@ -9,12 +9,12 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL=https://github.com/akhbararianda/AIRI
 VersionInfoCompany=AIRI Technology
-VersionInfoDescription=AIRI Download Manager - Developed by AIRI Technology, Founder Akhbar Arianda
+VersionInfoDescription=AIRI Download Manager - License Cloud & Intelligence - Developed by AIRI Technology, Founder Akhbar Arianda
 VersionInfoProductName=AIRI Download Manager
-VersionInfoProductVersion=2.6.2
+VersionInfoProductVersion=2.7.0
 DefaultDirName={localappdata}\Programs\AIRI Download Manager
 DefaultGroupName=AIRI Download Manager
-OutputBaseFilename=AIRI-Download-Manager-Setup-v2.6.2
+OutputBaseFilename=AIRI-Download-Manager-Setup-v2.7
 OutputDir=Output
 SetupIconFile=..\src\app\airi.ico
 Compression=lzma2
@@ -34,6 +34,8 @@ Source: "..\third_party\tools\yt-dlp.exe"; DestDir: "{app}\tools"; Flags: ignore
 Source: "..\third_party\tools\deno.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\third_party\tools\ffmpeg.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "..\third_party\tools\ffprobe.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\cloud-config\airi-cloud.url"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\cloud-config\airi-cloud.enforce"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 [Icons]
 Name: "{group}\AIRI Download Manager"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\AIRI Download Manager"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
@@ -43,6 +45,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch AIRI Download Manager"; Flags: nowait postinstall skipifsilent
 [UninstallDelete]
 Type: files; Name: "{app}\com.airi.downloadmanager.json"
+Type: files; Name: "{app}\airi-cloud.url"
+Type: files; Name: "{app}\airi-cloud.enforce"
 [Code]
 const NativeHost='com.airi.downloadmanager'; ExtensionOrigin='chrome-extension://knmjnpnbngjeilejfdhccehndiengjan/';
 procedure RegisterNativeHost;
