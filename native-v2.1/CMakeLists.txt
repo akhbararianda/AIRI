@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(AIRIDownloadManagerNative VERSION 2.7.1 LANGUAGES CXX)
+project(AIRIDownloadManagerNative VERSION 2.7.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ add_test(NAME airi_core_tests COMMAND airi_core_tests)
 
 if(WIN32)
     add_library(airi_engine STATIC
-        src/engine/download_engine_v271.cpp
+        src/engine/download_engine_v272_fixed.cpp
         src/engine/media_worker.cpp
     )
     target_include_directories(airi_engine PUBLIC src)
