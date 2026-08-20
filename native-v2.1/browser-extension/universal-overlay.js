@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__AIRI_UNIVERSAL_MEDIA_34)return;
-  window.__AIRI_UNIVERSAL_MEDIA_34=true;
+  if(window.__AIRI_UNIVERSAL_MEDIA_35)return;
+  window.__AIRI_UNIVERSAL_MEDIA_35=true;
   const mounted=new WeakMap();
   const MIN_W=240,MIN_H=135;
 

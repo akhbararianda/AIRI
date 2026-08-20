@@ -1,5 +1,5 @@
 #define MyAppName "AIRI Download Manager"
-#define MyAppVersion "2.7.2"
+#define MyAppVersion "2.8.0"
 #define MyAppPublisher "AIRI Technology"
 #define MyAppExeName "AIRI Download Manager.exe"
 [Setup]
@@ -9,12 +9,12 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL=https://github.com/akhbararianda/AIRI
 VersionInfoCompany=AIRI Technology
-VersionInfoDescription=AIRI Download Manager - Persistent Resume + Large File Stability + License Cloud - Developed by AIRI Technology, Founder Akhbar Arianda
+VersionInfoDescription=AIRI Download Manager - Stable UI + Persistent Resume + Large File Stability + License Cloud - Developed by AIRI Technology, Founder Akhbar Arianda
 VersionInfoProductName=AIRI Download Manager
-VersionInfoProductVersion=2.7.2
+VersionInfoProductVersion=2.8.0
 DefaultDirName={localappdata}\Programs\AIRI Download Manager
 DefaultGroupName=AIRI Download Manager
-OutputBaseFilename=AIRI-Download-Manager-Setup-v2.7.2
+OutputBaseFilename=AIRI-Download-Manager-Setup-v2.8.0
 OutputDir=Output
 SetupIconFile=..\src\app\airi.ico
 Compression=lzma2
