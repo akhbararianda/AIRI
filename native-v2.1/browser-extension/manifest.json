@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "AIRI Download Manager Integration",
-  "version": "3.5.0",
-  "description": "Universal media and browser download integration for AIRI Download Manager v2.8 Stable.",
-  "permissions": ["downloads", "nativeMessaging", "storage", "contextMenus", "cookies", "webRequest"],
+  "version": "3.6.0",
+  "description": "Advanced browser download and universal media integration for AIRI Download Manager v2.8 Stable.",
+  "permissions": ["downloads", "nativeMessaging", "storage", "contextMenus", "cookies", "webRequest", "tabs"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "service-worker.js"},
   "content_scripts": [
@@ -22,6 +22,12 @@
       "run_at": "document_idle"
     }
   ],
+  "commands": {
+    "download-page-media": {
+      "suggested_key": {"default": "Alt+Shift+D"},
+      "description": "Download media from the current page with AIRI"
+    }
+  },
   "action": {
     "default_title": "AIRI Download Manager",
     "default_popup": "popup.html",
