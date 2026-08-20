@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(AIRIDownloadManagerNative VERSION 2.7.2 LANGUAGES CXX)
+project(AIRIDownloadManagerNative VERSION 2.8.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,7 +48,7 @@ if(WIN32)
     add_test(NAME airi_license_tests COMMAND airi_license_tests)
 
     add_executable(AIRIDownloadManager WIN32
-        src/app/main_v26_airi.cpp
+        src/app/main_v28_pro.cpp
         src/app/license_cloud_agent.cpp
         src/app/app.rc
     )
