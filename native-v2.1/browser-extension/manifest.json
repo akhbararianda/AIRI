@@ -1,19 +1,27 @@
 {
   "manifest_version": 3,
   "name": "AIRI Download Manager Integration",
-  "version": "3.4.0",
-  "description": "Universal media and download integration for AIRI Download Manager v2.4.",
+  "version": "3.5.0",
+  "description": "Universal media and browser download integration for AIRI Download Manager v2.8 Stable.",
   "permissions": ["downloads", "nativeMessaging", "storage", "contextMenus", "cookies", "webRequest"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "background": {"service_worker": "service-worker.js"},
-  "content_scripts": [{
-    "matches": ["http://*/*", "https://*/*"],
-    "js": ["universal-overlay.js"],
-    "css": ["universal-overlay.css"],
-    "run_at": "document_idle",
-    "all_frames": true,
-    "match_about_blank": true
-  }],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["universal-overlay.js"],
+      "css": ["universal-overlay.css"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    },
+    {
+      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
+      "js": ["youtube-overlay.js"],
+      "css": ["youtube-overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_title": "AIRI Download Manager",
     "default_popup": "popup.html",
