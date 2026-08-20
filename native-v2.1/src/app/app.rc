@@ -93,7 +93,7 @@ BEGIN
 LTEXT "Default Turbo connections",-1,16,18,150,11
 COMBOBOX IDC_OPT_CONNECTIONS,180,15,90,100,CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP
 CONTROL "Start direct downloads immediately",IDC_OPT_AUTOSTART,"Button",BS_AUTOCHECKBOX|WS_TABSTOP,16,58,220,14
-CONTROL "Show Windows completion notifications",IDC_OPT_NOTIFY,"Button",BS_AUTOCHECKBOX|WS_TABSTOP,16,82,240,14
+CONTROL "Keep completed and failed download history",IDC_OPT_NOTIFY,"Button",BS_AUTOCHECKBOX|WS_TABSTOP,16,82,250,14
 LTEXT "Recommended: 8-16 connections. AIRI automatically caps large files when needed.",-1,16,112,340,25
 LTEXT "Settings are saved per Windows user.",-1,16,143,250,11
 PUSHBUTTON "Cancel",IDCANCEL,234,173,60,24
