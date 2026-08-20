@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(AIRIDownloadManagerNative VERSION 2.7.2 LANGUAGES CXX)
+project(AIRIDownloadManagerNative VERSION 2.8.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
